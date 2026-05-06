@@ -461,7 +461,7 @@ function DoctorCard({ doctor }) {
         <div>
           <h2>{doctor.name}</h2>
           <p>
-            {doctor.department} · {formatTimeRange(doctor.startTime, doctor.endTime)}
+            {doctor.department} - {formatTimeRange(doctor.startTime, doctor.endTime)}
           </p>
           <span>{doctor.mobile}</span>
         </div>

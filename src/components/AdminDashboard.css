@@ -91,6 +91,7 @@
 }
 
 .admin-shell {
+  background: #2b2c29;
   display: flex;
   overflow: hidden;
 }
@@ -299,9 +300,10 @@
 }
 
 .doctor-management {
-  width: min(100%, 940px);
+  width: 100%;
   display: grid;
   gap: 10px;
+  justify-self: stretch;
 }
 
 .doctor-management-header {
@@ -309,7 +311,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  margin-bottom: 8px;
+  margin-bottom: 14px;
 }
 
 .doctor-management-header h1 {
@@ -324,14 +326,16 @@
 .doctor-empty-state button,
 .doctor-form-submit,
 .doctor-form-header button {
-  min-height: 34px;
+  min-height: 42px;
   border: 1px solid #6b6c67;
   border-radius: 9px;
   background: transparent;
   color: #f4f4ef;
   cursor: pointer;
+  font-size: 15px;
   font-weight: 850;
-  padding: 0 14px;
+  line-height: 1;
+  padding: 0 18px;
 }
 
 .doctor-form {
@@ -403,7 +407,7 @@
 }
 
 .doctor-empty-state {
-  min-height: 260px;
+  min-height: 324px;
   border: 1px dashed #585955;
   border-radius: 12px;
   color: #c7c7bf;
