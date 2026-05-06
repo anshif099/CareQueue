@@ -514,6 +514,34 @@
   padding: 5px 10px;
 }
 
+.doctor-actions {
+  position: absolute;
+  top: 55px;
+  right: 15px;
+  display: flex;
+  gap: 8px;
+}
+
+.doctor-actions button {
+  min-height: unset;
+  padding: 6px 12px;
+  font-size: 12px;
+  border-radius: 6px;
+  border: none;
+  cursor: pointer;
+  font-weight: bold;
+}
+
+.doctor-actions .btn-edit {
+  background: #3b82f6;
+  color: white;
+}
+
+.doctor-actions .btn-delete {
+  background: #ef4444;
+  color: white;
+}
+
 .doctor-metrics {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));

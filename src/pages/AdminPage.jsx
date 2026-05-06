@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { onValue, push, ref as databaseRef, serverTimestamp } from 'firebase/database'
+import { onValue, push, ref as databaseRef, serverTimestamp, update, remove } from 'firebase/database'
 import { database } from '../lib/firebase.jsx'
 import '../components/AdminDashboard.css'
 
@@ -17,6 +17,7 @@ const queueRows = [
 ]
 
 const emptyDoctorForm = {
+  id: '',
   name: '',
   department: '',
   mobile: '',
@@ -27,6 +28,7 @@ const emptyDoctorForm = {
   endMinute: '00',
   endPeriod: 'PM',
   appointmentsPerDay: '',
+  counter: '',
 }
 
 const hourOptions = Array.from({ length: 12 }, (_, index) => String(index + 1))
@@ -167,6 +169,34 @@ function AdminPage() {
     setDoctorForm((current) => ({ ...current, [field]: value }))
   }
 
+  async function handleDoctorDelete(id) {
+    if (window.confirm('Are you sure you want to delete this doctor?')) {
+      try {
+        await remove(databaseRef(database, `doctors/${id}`))
+      } catch (err) {
+        setDoctorsError(err.message)
+      }
+    }
+  }
+
+  function handleDoctorEdit(doctor) {
+    setDoctorForm({
+      id: doctor.id,
+      name: doctor.name || '',
+      department: doctor.department || '',
+      mobile: doctor.mobile || '',
+      startHour: doctor.startTimeLabel?.split(':')[0] || '9',
+      startMinute: doctor.startTimeLabel?.split(':')[1]?.split(' ')[0] || '00',
+      startPeriod: doctor.startTimeLabel?.split(' ')[1] || 'AM',
+      endHour: doctor.endTimeLabel?.split(':')[0] || '5',
+      endMinute: doctor.endTimeLabel?.split(':')[1]?.split(' ')[0] || '00',
+      endPeriod: doctor.endTimeLabel?.split(' ')[1] || 'PM',
+      appointmentsPerDay: doctor.appointmentsPerDay || '',
+      counter: doctor.counter || '',
+    })
+    setIsDoctorFormOpen(true)
+  }
+
   async function handleDoctorSubmit(event) {
     event.preventDefault()
     setDoctorFormError('')
@@ -179,7 +209,7 @@ function AdminPage() {
         throw new Error('Enter a valid number of appointments per day')
       }
 
-      await push(databaseRef(database, 'doctors'), {
+      const doctorData = {
         name: doctorForm.name.trim(),
         department: doctorForm.department.trim(),
         mobile: doctorForm.mobile.trim(),
@@ -192,9 +222,18 @@ function AdminPage() {
         startTimeLabel: `${doctorForm.startHour}:${doctorForm.startMinute} ${doctorForm.startPeriod}`,
         endTimeLabel: `${doctorForm.endHour}:${doctorForm.endMinute} ${doctorForm.endPeriod}`,
         appointmentsPerDay,
+        counter: doctorForm.counter ? doctorForm.counter.trim() : '',
         status: 'Consulting',
-        createdAt: serverTimestamp(),
-      })
+      }
+
+      if (doctorForm.id) {
+        await update(databaseRef(database, `doctors/${doctorForm.id}`), doctorData)
+      } else {
+        await push(databaseRef(database, 'doctors'), {
+          ...doctorData,
+          createdAt: serverTimestamp(),
+        })
+      }
 
       setDoctorForm(emptyDoctorForm)
       setIsDoctorFormOpen(false)
@@ -289,10 +328,16 @@ function AdminPage() {
             onCloseForm={() => {
               setIsDoctorFormOpen(false)
               setDoctorFormError('')
+              setDoctorForm(emptyDoctorForm)
             }}
-            onOpenForm={() => setIsDoctorFormOpen(true)}
+            onOpenForm={() => {
+              setDoctorForm(emptyDoctorForm)
+              setIsDoctorFormOpen(true)
+            }}
             onSubmit={handleDoctorSubmit}
             onUpdateField={updateDoctorField}
+            onEditDoctor={handleDoctorEdit}
+            onDeleteDoctor={handleDoctorDelete}
           />
         ) : (
           <DashboardOverview activeItem={activeItem} onLogout={handleLogout} today={today} />
@@ -366,6 +411,8 @@ function DoctorManagement({
   onOpenForm,
   onSubmit,
   onUpdateField,
+  onEditDoctor,
+  onDeleteDoctor,
 }) {
   return (
     <section className="doctor-management">
@@ -450,6 +497,15 @@ function DoctorManagement({
                 placeholder="18"
               />
             </label>
+
+            <label>
+              Counter
+              <input
+                value={doctorForm.counter}
+                onChange={(event) => onUpdateField('counter', event.target.value)}
+                placeholder="e.g. Counter 1"
+              />
+            </label>
           </div>
 
           {doctorFormError && <p className="doctor-form-error">{doctorFormError}</p>}
@@ -475,7 +531,12 @@ function DoctorManagement({
       ) : (
         <div className="doctor-list">
           {doctors.map((doctor) => (
-            <DoctorCard doctor={doctor} key={doctor.id} />
+            <DoctorCard 
+              doctor={doctor} 
+              key={doctor.id} 
+              onEdit={() => onEditDoctor(doctor)}
+              onDelete={() => onDeleteDoctor(doctor.id)}
+            />
           ))}
         </div>
       )}
@@ -525,7 +586,7 @@ function TimeSelectGroup({ hour, minute, onUpdateField, period, prefix }) {
   )
 }
 
-function DoctorCard({ doctor }) {
+function DoctorCard({ doctor, onEdit, onDelete }) {
   const appointmentsPerDay = Number(doctor.appointmentsPerDay) || 0
 
   return (
@@ -536,12 +597,18 @@ function DoctorCard({ doctor }) {
           <h2>{doctor.name}</h2>
           <p>
             {doctor.department} - {formatTimeRange(doctor.startTime, doctor.endTime)}
+            {doctor.counter ? ` | ${doctor.counter}` : ''}
           </p>
           <span>{doctor.mobile}</span>
         </div>
       </div>
 
       <div className="doctor-status">{doctor.status || 'Consulting'}</div>
+      
+      <div className="doctor-actions">
+        <button type="button" onClick={onEdit} className="btn-edit">Edit</button>
+        <button type="button" onClick={onDelete} className="btn-delete">Delete</button>
+      </div>
 
       <div className="doctor-metrics">
         <div>
