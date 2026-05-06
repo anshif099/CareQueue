@@ -35,7 +35,7 @@ const translations = {
     selectDate: 'SELECT DATE',
     availableSlots: 'AVAILABLE SLOTS',
     selected: 'Selected',
-    fullyBooked: 'Fully booked',
+    noLiveSlots: 'No live slots available now',
     confirmAppointment: 'Confirm appointment',
     walkInToken: 'Get walk-in token instead',
     tokenIssued: 'Token issued',
@@ -77,7 +77,6 @@ const translations = {
     selectDate: 'तारीख चुनें',
     availableSlots: 'उपलब्ध स्लॉट',
     selected: 'चयनित',
-    fullyBooked: 'पूरी तरह बुक',
     confirmAppointment: 'अपॉइंटमेंट पुष्टि करें',
     walkInToken: 'वॉक-इन टोकन लें',
   },
@@ -105,7 +104,6 @@ const translations = {
     selectDate: 'തീയതി തിരഞ്ഞെടുക്കുക',
     availableSlots: 'ലഭ്യമായ സ്ലോട്ടുകൾ',
     selected: 'തിരഞ്ഞെടുത്തു',
-    fullyBooked: 'പൂർണ്ണമായി ബുക്ക് ചെയ്തു',
     confirmAppointment: 'അപ്പോയിന്റ്മെന്റ് സ്ഥിരീകരിക്കുക',
     walkInToken: 'വാക്ക്-ഇൻ ടോക്കൺ നേടുക',
   },
@@ -133,7 +131,6 @@ const translations = {
     selectDate: 'தேதியைத் தேர்ந்தெடுக்கவும்',
     availableSlots: 'கிடைக்கும் நேரங்கள்',
     selected: 'தேர்ந்தெடுக்கப்பட்டது',
-    fullyBooked: 'முழுவதும் பதிவு செய்யப்பட்டது',
     confirmAppointment: 'அப்பாயிண்ட்மெண்ட் உறுதி செய்யவும்',
     walkInToken: 'வாக்-இன் டோக்கன் பெறவும்',
     tokenIssued: 'டோக்கன் வழங்கப்பட்டது',
@@ -247,7 +244,23 @@ function formatMinutesAsTime(totalMinutes) {
   return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`
 }
 
-function getAppointmentSlots(doctor) {
+function formatMinutesAs12Hour(totalMinutes) {
+  const hour24 = Math.floor(totalMinutes / 60) % 24
+  const minute = totalMinutes % 60
+  const period = hour24 >= 12 ? 'PM' : 'AM'
+  const hour12 = hour24 % 12 || 12
+  return `${hour12}:${String(minute).padStart(2, '0')} ${period}`
+}
+
+function isSameCalendarDate(firstDate, secondDate) {
+  return (
+    firstDate.getFullYear() === secondDate.getFullYear() &&
+    firstDate.getMonth() === secondDate.getMonth() &&
+    firstDate.getDate() === secondDate.getDate()
+  )
+}
+
+function getAppointmentSlots(doctor, selectedDate) {
   const startTotal = parseTimeToMinutes(doctor?.startTime)
   let endTotal = parseTimeToMinutes(doctor?.endTime)
   const maxSlots = Math.max(6, Math.min(14, Number(doctor?.appointmentsPerDay) || 8))
@@ -257,37 +270,67 @@ function getAppointmentSlots(doctor) {
   }
 
   const slotStep = Math.max(20, Math.floor((endTotal - startTotal) / maxSlots))
+  const now = new Date()
+  const nowTotal = now.getHours() * 60 + now.getMinutes()
+  const waitingDelay = isSameCalendarDate(selectedDate, now) ? getDoctorWait(doctor) * slotStep : 0
+  const liveStart = isSameCalendarDate(selectedDate, now)
+    ? Math.max(startTotal, nowTotal) + waitingDelay
+    : startTotal
+  const firstSlotTotal = startTotal + Math.max(0, Math.ceil((liveStart - startTotal) / slotStep)) * slotStep
   const slots = []
 
-  for (let index = 0; index < maxSlots && startTotal + index * slotStep < endTotal; index += 1) {
-    const value = formatMinutesAsTime(startTotal + index * slotStep)
+  for (
+    let slotTotal = firstSlotTotal;
+    slots.length < maxSlots && slotTotal < endTotal;
+    slotTotal += slotStep
+  ) {
+    const value = formatMinutesAsTime(slotTotal)
     slots.push({
       value,
-      label: value,
-      isFull: index === 4 || index === 6,
+      label: formatMinutesAs12Hour(slotTotal),
     })
   }
 
   return slots
 }
 
-function getMonthDays() {
-  const monthDate = new Date(2026, 4, 1)
-  const daysInMonth = new Date(2026, 5, 0).getDate()
+function getMonthDays(baseDate) {
+  const monthDate = new Date(baseDate.getFullYear(), baseDate.getMonth(), 1)
+  const daysInMonth = new Date(baseDate.getFullYear(), baseDate.getMonth() + 1, 0).getDate()
   const leadingBlanks = monthDate.getDay()
-  const selectableDays = new Set([2, 4, 5, 7, 9, 11, 12, 14, 16, 18, 19, 21, 23, 25, 26, 28])
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
 
   return [
     ...Array.from({ length: leadingBlanks }, (_, index) => ({ id: `blank-${index}` })),
     ...Array.from({ length: daysInMonth }, (_, index) => {
       const day = index + 1
+      const date = new Date(baseDate.getFullYear(), baseDate.getMonth(), day)
       return {
         id: day,
         day,
-        isSelectable: selectableDays.has(day),
+        date,
+        isSelectable: date >= today,
       }
     }),
   ]
+}
+
+function formatMonthTitle(date) {
+  return new Intl.DateTimeFormat(undefined, {
+    month: 'long',
+    year: 'numeric',
+  }).format(date)
+}
+
+function formatSelectedDateTitle(date) {
+  return new Intl.DateTimeFormat(undefined, {
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+  })
+    .format(date)
+    .toUpperCase()
 }
 
 function getTokenNumber(doctor, slot) {
@@ -681,16 +724,17 @@ function DoctorChoiceCard({ doctor, isUnavailable = false, onChooseDoctor, text 
 }
 
 function BookingPage({ doctor, onBack, onConfirm, text, time }) {
-  const slots = useMemo(() => getAppointmentSlots(doctor), [doctor])
-  const [selectedDay, setSelectedDay] = useState(2)
-  const [selectedSlot, setSelectedSlot] = useState(() => slots.find((slot) => !slot.isFull)?.value)
-  const firstAvailableSlot = slots.find((slot) => !slot.isFull)
-  const selectedSlotValue = slots.some((slot) => slot.value === selectedSlot && !slot.isFull)
+  const today = useMemo(() => new Date(), [])
+  const [selectedDate, setSelectedDate] = useState(today)
+  const slots = useMemo(() => getAppointmentSlots(doctor, selectedDate), [doctor, selectedDate])
+  const [selectedSlot, setSelectedSlot] = useState(() => slots[0]?.value)
+  const firstAvailableSlot = slots[0]
+  const selectedSlotValue = slots.some((slot) => slot.value === selectedSlot)
     ? selectedSlot
     : firstAvailableSlot?.value
   const selectedSlotLabel =
     slots.find((slot) => slot.value === selectedSlotValue)?.label ?? firstAvailableSlot?.label ?? ''
-  const monthDays = useMemo(() => getMonthDays(), [])
+  const monthDays = useMemo(() => getMonthDays(today), [today])
 
   return (
     <div className="booking-page">
@@ -708,7 +752,9 @@ function BookingPage({ doctor, onBack, onConfirm, text, time }) {
       </header>
 
       <section className="booking-content">
-        <p className="department-eyebrow">{text.selectDate} — MAY 2026</p>
+        <p className="department-eyebrow">
+          {text.selectDate} — {formatMonthTitle(today)}
+        </p>
 
         <div className="booking-calendar-weekdays" aria-hidden="true">
           <span>Su</span>
@@ -725,12 +771,15 @@ function BookingPage({ doctor, onBack, onConfirm, text, time }) {
             day.day ? (
               <button
                 className="booking-day"
-                data-selected={day.day === selectedDay}
+                data-selected={isSameCalendarDate(day.date, selectedDate)}
                 data-available={day.isSelectable}
                 disabled={!day.isSelectable}
                 key={day.id}
                 type="button"
-                onClick={() => setSelectedDay(day.day)}
+                onClick={() => {
+                  setSelectedDate(day.date)
+                  setSelectedSlot(undefined)
+                }}
               >
                 {day.day}
               </button>
@@ -741,37 +790,37 @@ function BookingPage({ doctor, onBack, onConfirm, text, time }) {
         </div>
 
         <p className="department-eyebrow booking-slots-title">
-          {text.availableSlots} · THU {selectedDay} MAY
+          {text.availableSlots} · {formatSelectedDateTitle(selectedDate)}
         </p>
 
-        <div className="booking-slots">
-          {slots.map((slot) => (
-            <button
-              className="booking-slot"
-              data-selected={slot.value === selectedSlotValue}
-              disabled={slot.isFull}
-              key={slot.value}
-              type="button"
-              onClick={() => setSelectedSlot(slot.value)}
-            >
-              {slot.label}
-            </button>
-          ))}
-        </div>
+        {slots.length === 0 ? (
+          <p className="department-message">{text.noLiveSlots}</p>
+        ) : (
+          <div className="booking-slots">
+            {slots.map((slot) => (
+              <button
+                className="booking-slot"
+                data-selected={slot.value === selectedSlotValue}
+                key={slot.value}
+                type="button"
+                onClick={() => setSelectedSlot(slot.value)}
+              >
+                {slot.label}
+              </button>
+            ))}
+          </div>
+        )}
 
         <div className="booking-legend">
           <span>
             <i></i>
             {text.selected}
           </span>
-          <span>
-            <i data-muted="true"></i>
-            {text.fullyBooked}
-          </span>
         </div>
 
         <button
           className="booking-confirm"
+          disabled={!selectedSlotValue}
           type="button"
           onClick={() =>
             onConfirm({
@@ -780,7 +829,7 @@ function BookingPage({ doctor, onBack, onConfirm, text, time }) {
             })
           }
         >
-          {text.confirmAppointment} — {selectedSlotLabel}
+          {text.confirmAppointment} — {selectedSlotLabel || '--'}
         </button>
 
         <button className="booking-walkin" type="button" disabled>

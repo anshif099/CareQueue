@@ -606,7 +606,7 @@
 .booking-slots {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px 10px;
+  gap: 8px;
 }
 
 .booking-slot {
@@ -616,9 +616,10 @@
   background: #fff;
   color: #005bb0;
   cursor: pointer;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 750;
   line-height: 1;
+  padding: 0 4px;
 }
 
 .booking-slot[data-selected='true'] {
@@ -677,6 +678,11 @@
   color: #fff;
   cursor: pointer;
   padding: 10px 18px;
+}
+
+.booking-confirm:disabled {
+  opacity: 0.45;
+  cursor: default;
 }
 
 .booking-walkin {
