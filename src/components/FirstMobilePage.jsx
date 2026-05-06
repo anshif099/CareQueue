@@ -31,6 +31,13 @@ const translations = {
     patientsAhead: 'patients ahead',
     onLeave: 'On leave today',
     availableFrom: 'Available from',
+    bookAppointment: 'Book appointment',
+    selectDate: 'SELECT DATE',
+    availableSlots: 'AVAILABLE SLOTS',
+    selected: 'Selected',
+    fullyBooked: 'Fully booked',
+    confirmAppointment: 'Confirm appointment',
+    walkInToken: 'Get walk-in token instead',
   },
   hi: {
     clinic: 'सिटी हेल्थ क्लिनिक',
@@ -52,6 +59,13 @@ const translations = {
     patientsAhead: 'मरीज आगे',
     onLeave: 'आज छुट्टी पर',
     availableFrom: 'उपलब्ध समय',
+    bookAppointment: 'अपॉइंटमेंट बुक करें',
+    selectDate: 'तारीख चुनें',
+    availableSlots: 'उपलब्ध स्लॉट',
+    selected: 'चयनित',
+    fullyBooked: 'पूरी तरह बुक',
+    confirmAppointment: 'अपॉइंटमेंट पुष्टि करें',
+    walkInToken: 'वॉक-इन टोकन लें',
   },
   ml: {
     clinic: 'സിറ്റി ഹെൽത്ത് ക്ലിനിക്',
@@ -73,6 +87,13 @@ const translations = {
     patientsAhead: 'രോഗികൾ മുന്നിൽ',
     onLeave: 'ഇന്ന് അവധി',
     availableFrom: 'ലഭ്യമാകുന്ന സമയം',
+    bookAppointment: 'അപ്പോയിന്റ്മെന്റ് ബുക്ക് ചെയ്യുക',
+    selectDate: 'തീയതി തിരഞ്ഞെടുക്കുക',
+    availableSlots: 'ലഭ്യമായ സ്ലോട്ടുകൾ',
+    selected: 'തിരഞ്ഞെടുത്തു',
+    fullyBooked: 'പൂർണ്ണമായി ബുക്ക് ചെയ്തു',
+    confirmAppointment: 'അപ്പോയിന്റ്മെന്റ് സ്ഥിരീകരിക്കുക',
+    walkInToken: 'വാക്ക്-ഇൻ ടോക്കൺ നേടുക',
   },
   ta: {
     clinic: 'சிட்டி ஹெல்த் கிளினிக்',
@@ -94,6 +115,13 @@ const translations = {
     patientsAhead: 'நோயாளிகள் முன்னால்',
     onLeave: 'இன்று விடுப்பு',
     availableFrom: 'கிடைக்கும் நேரம்',
+    bookAppointment: 'அப்பாயிண்ட்மெண்ட் பதிவு செய்யவும்',
+    selectDate: 'தேதியைத் தேர்ந்தெடுக்கவும்',
+    availableSlots: 'கிடைக்கும் நேரங்கள்',
+    selected: 'தேர்ந்தெடுக்கப்பட்டது',
+    fullyBooked: 'முழுவதும் பதிவு செய்யப்பட்டது',
+    confirmAppointment: 'அப்பாயிண்ட்மெண்ட் உறுதி செய்யவும்',
+    walkInToken: 'வாக்-இன் டோக்கன் பெறவும்',
   },
 }
 
@@ -176,6 +204,64 @@ function getAverageSlotMinutes(startTime, endTime, appointmentsPerDay) {
   return Math.max(5, Math.round((endTotal - startTotal) / Number(appointmentsPerDay)))
 }
 
+function parseTimeToMinutes(time) {
+  if (!time) {
+    return 9 * 60
+  }
+
+  const [hour, minute] = time.split(':').map(Number)
+  return hour * 60 + minute
+}
+
+function formatMinutesAsTime(totalMinutes) {
+  const hour = Math.floor(totalMinutes / 60) % 24
+  const minute = totalMinutes % 60
+  return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`
+}
+
+function getAppointmentSlots(doctor) {
+  const startTotal = parseTimeToMinutes(doctor?.startTime)
+  let endTotal = parseTimeToMinutes(doctor?.endTime)
+  const maxSlots = Math.max(6, Math.min(14, Number(doctor?.appointmentsPerDay) || 8))
+
+  if (endTotal <= startTotal) {
+    endTotal += 24 * 60
+  }
+
+  const slotStep = Math.max(20, Math.floor((endTotal - startTotal) / maxSlots))
+  const slots = []
+
+  for (let index = 0; index < maxSlots && startTotal + index * slotStep < endTotal; index += 1) {
+    const value = formatMinutesAsTime(startTotal + index * slotStep)
+    slots.push({
+      value,
+      label: value,
+      isFull: index === 4 || index === 6,
+    })
+  }
+
+  return slots
+}
+
+function getMonthDays() {
+  const monthDate = new Date(2026, 4, 1)
+  const daysInMonth = new Date(2026, 5, 0).getDate()
+  const leadingBlanks = monthDate.getDay()
+  const selectableDays = new Set([2, 4, 5, 7, 9, 11, 12, 14, 16, 18, 19, 21, 23, 25, 26, 28])
+
+  return [
+    ...Array.from({ length: leadingBlanks }, (_, index) => ({ id: `blank-${index}` })),
+    ...Array.from({ length: daysInMonth }, (_, index) => {
+      const day = index + 1
+      return {
+        id: day,
+        day,
+        isSelectable: selectableDays.has(day),
+      }
+    }),
+  ]
+}
+
 function mapDoctors(snapshot) {
   const doctors = snapshot.val()
 
@@ -232,6 +318,7 @@ function FirstMobilePage() {
   const [time, setTime] = useState(getDeviceTime)
   const [screen, setScreen] = useState('language')
   const [selectedDepartment, setSelectedDepartment] = useState(null)
+  const [selectedDoctor, setSelectedDoctor] = useState(null)
   const [doctors, setDoctors] = useState([])
   const [isDepartmentsLoading, setIsDepartmentsLoading] = useState(true)
   const [departmentsError, setDepartmentsError] = useState('')
@@ -308,11 +395,22 @@ function FirstMobilePage() {
             text={text}
             time={time}
           />
-        ) : (
+        ) : screen === 'doctors' ? (
           <DoctorSelection
             department={selectedDepartment}
             doctors={doctors}
+            onChooseDoctor={(doctor) => {
+              setSelectedDoctor(doctor)
+              setScreen('booking')
+            }}
             onBack={() => setScreen('departments')}
+            text={text}
+            time={time}
+          />
+        ) : (
+          <BookingPage
+            doctor={selectedDoctor}
+            onBack={() => setScreen('doctors')}
             text={text}
             time={time}
           />
@@ -436,10 +534,13 @@ function DepartmentSelection({ departments, error, isLoading, onBack, onSelectDe
   )
 }
 
-function DoctorSelection({ department, doctors, onBack, text, time }) {
+function DoctorSelection({ department, doctors, onBack, onChooseDoctor, text, time }) {
   const departmentDoctors = doctors.filter((doctor) => doctor.department === department?.name)
   const availableDoctors = departmentDoctors.filter(isDoctorAvailable)
   const unavailableDoctors = departmentDoctors.filter((doctor) => !isDoctorAvailable(doctor))
+  const nextAvailableDoctor = [...availableDoctors].sort(
+    (first, second) => getDoctorWait(first) - getDoctorWait(second),
+  )[0]
 
   return (
     <div className="doctor-choice-page">
@@ -462,7 +563,12 @@ function DoctorSelection({ department, doctors, onBack, text, time }) {
         ) : (
           <div className="doctor-choice-list">
             {availableDoctors.map((doctor) => (
-              <DoctorChoiceCard doctor={doctor} key={doctor.id} text={text} />
+              <DoctorChoiceCard
+                doctor={doctor}
+                key={doctor.id}
+                onChooseDoctor={onChooseDoctor}
+                text={text}
+              />
             ))}
           </div>
         )}
@@ -472,14 +578,25 @@ function DoctorSelection({ department, doctors, onBack, text, time }) {
             <p className="department-eyebrow doctor-choice-section-title">{text.unavailableToday}</p>
             <div className="doctor-choice-list">
               {unavailableDoctors.map((doctor) => (
-                <DoctorChoiceCard doctor={doctor} isUnavailable key={doctor.id} text={text} />
+                <DoctorChoiceCard
+                  doctor={doctor}
+                  isUnavailable
+                  key={doctor.id}
+                  onChooseDoctor={onChooseDoctor}
+                  text={text}
+                />
               ))}
             </div>
           </>
         )}
 
         <p className="doctor-choice-skip-label">{text.skipDoctorChoice}</p>
-        <button className="doctor-choice-skip" type="button">
+        <button
+          className="doctor-choice-skip"
+          disabled={!nextAvailableDoctor}
+          type="button"
+          onClick={() => nextAvailableDoctor && onChooseDoctor(nextAvailableDoctor)}
+        >
           <strong>{text.nextAvailableDoctor}</strong>
           <span>{text.shortestWait}</span>
         </button>
@@ -488,12 +605,17 @@ function DoctorSelection({ department, doctors, onBack, text, time }) {
   )
 }
 
-function DoctorChoiceCard({ doctor, isUnavailable = false, text }) {
+function DoctorChoiceCard({ doctor, isUnavailable = false, onChooseDoctor, text }) {
   const waitMinutes = getAverageSlotMinutes(doctor.startTime, doctor.endTime, doctor.appointmentsPerDay)
   const waitCount = getDoctorWait(doctor)
 
   return (
-    <button className="doctor-choice-card" disabled={isUnavailable} type="button">
+    <button
+      className="doctor-choice-card"
+      disabled={isUnavailable}
+      type="button"
+      onClick={() => onChooseDoctor(doctor)}
+    >
       <div className="doctor-choice-avatar">{getInitials(doctor.name || 'Doctor')}</div>
       <span className="doctor-choice-info">
         <strong>{doctor.name}</strong>
@@ -508,6 +630,108 @@ function DoctorChoiceCard({ doctor, isUnavailable = false, text }) {
       </span>
       {!isUnavailable && <b>~{waitMinutes} min</b>}
     </button>
+  )
+}
+
+function BookingPage({ doctor, onBack, text, time }) {
+  const slots = useMemo(() => getAppointmentSlots(doctor), [doctor])
+  const [selectedDay, setSelectedDay] = useState(2)
+  const [selectedSlot, setSelectedSlot] = useState(() => slots.find((slot) => !slot.isFull)?.value)
+  const firstAvailableSlot = slots.find((slot) => !slot.isFull)
+  const selectedSlotValue = slots.some((slot) => slot.value === selectedSlot && !slot.isFull)
+    ? selectedSlot
+    : firstAvailableSlot?.value
+  const selectedSlotLabel =
+    slots.find((slot) => slot.value === selectedSlotValue)?.label ?? firstAvailableSlot?.label ?? ''
+  const monthDays = useMemo(() => getMonthDays(), [])
+
+  return (
+    <div className="booking-page">
+      <header className="department-hero booking-hero">
+        <div className="department-hero-bar">
+          <div className="department-status">{time}</div>
+          <button className="department-back-button" type="button" onClick={onBack} aria-label="Go back">
+            ←
+          </button>
+        </div>
+        <h1>{text.bookAppointment}</h1>
+        <p>
+          {doctor?.name} · {doctor?.department}
+        </p>
+      </header>
+
+      <section className="booking-content">
+        <p className="department-eyebrow">{text.selectDate} — MAY 2026</p>
+
+        <div className="booking-calendar-weekdays" aria-hidden="true">
+          <span>Su</span>
+          <span>Mo</span>
+          <span>Tu</span>
+          <span>We</span>
+          <span>Th</span>
+          <span>Fr</span>
+          <span>Sa</span>
+        </div>
+
+        <div className="booking-calendar">
+          {monthDays.map((day) =>
+            day.day ? (
+              <button
+                className="booking-day"
+                data-selected={day.day === selectedDay}
+                data-available={day.isSelectable}
+                disabled={!day.isSelectable}
+                key={day.id}
+                type="button"
+                onClick={() => setSelectedDay(day.day)}
+              >
+                {day.day}
+              </button>
+            ) : (
+              <span key={day.id}></span>
+            ),
+          )}
+        </div>
+
+        <p className="department-eyebrow booking-slots-title">
+          {text.availableSlots} · THU {selectedDay} MAY
+        </p>
+
+        <div className="booking-slots">
+          {slots.map((slot) => (
+            <button
+              className="booking-slot"
+              data-selected={slot.value === selectedSlotValue}
+              disabled={slot.isFull}
+              key={slot.value}
+              type="button"
+              onClick={() => setSelectedSlot(slot.value)}
+            >
+              {slot.label}
+            </button>
+          ))}
+        </div>
+
+        <div className="booking-legend">
+          <span>
+            <i></i>
+            {text.selected}
+          </span>
+          <span>
+            <i data-muted="true"></i>
+            {text.fullyBooked}
+          </span>
+        </div>
+
+        <button className="booking-confirm" type="button">
+          {text.confirmAppointment} — {selectedSlotLabel}
+        </button>
+
+        <button className="booking-walkin" type="button" disabled>
+          {text.walkInToken}
+        </button>
+      </section>
+    </div>
   )
 }
 
