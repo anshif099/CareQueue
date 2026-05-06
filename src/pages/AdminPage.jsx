@@ -1,4 +1,6 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { onValue, push, ref as databaseRef, serverTimestamp } from 'firebase/database'
+import { database } from '../lib/firebase.jsx'
 import '../components/AdminDashboard.css'
 
 const adminCredentials = {
@@ -14,11 +16,75 @@ const queueRows = [
   { token: 'C008', patient: 'Anu K.', department: 'Pediatrics', status: 'Ready' },
 ]
 
+const emptyDoctorForm = {
+  name: '',
+  department: '',
+  mobile: '',
+  startTime: '',
+  endTime: '',
+  appointmentsPerDay: '',
+}
+
+function getInitials(name) {
+  return name
+    .split(' ')
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0])
+    .join('')
+    .toUpperCase()
+}
+
+function formatTimeRange(startTime, endTime) {
+  if (!startTime || !endTime) {
+    return 'Time not set'
+  }
+
+  return `${startTime} - ${endTime}`
+}
+
+function getAverageSlot(startTime, endTime, appointmentsPerDay) {
+  if (!startTime || !endTime || !appointmentsPerDay) {
+    return '0m'
+  }
+
+  const [startHour, startMinute] = startTime.split(':').map(Number)
+  const [endHour, endMinute] = endTime.split(':').map(Number)
+  const startTotal = startHour * 60 + startMinute
+  let endTotal = endHour * 60 + endMinute
+
+  if (endTotal <= startTotal) {
+    endTotal += 24 * 60
+  }
+
+  const slotMinutes = Math.max(1, Math.round((endTotal - startTotal) / appointmentsPerDay))
+  return `${slotMinutes}m`
+}
+
+function mapDoctors(snapshot) {
+  const doctors = snapshot.val()
+
+  if (!doctors) {
+    return []
+  }
+
+  return Object.entries(doctors)
+    .map(([id, doctor]) => ({ id, ...doctor }))
+    .sort((first, second) => (second.createdAt ?? 0) - (first.createdAt ?? 0))
+}
+
 function AdminPage() {
   const [isAuthed, setIsAuthed] = useState(() => sessionStorage.getItem('carequeue-admin') === '1')
   const [activeItem, setActiveItem] = useState('Overview')
   const [formData, setFormData] = useState({ username: '', password: '' })
   const [error, setError] = useState('')
+  const [doctors, setDoctors] = useState([])
+  const [isDoctorsLoading, setIsDoctorsLoading] = useState(true)
+  const [doctorsError, setDoctorsError] = useState('')
+  const [isDoctorFormOpen, setIsDoctorFormOpen] = useState(false)
+  const [doctorForm, setDoctorForm] = useState(emptyDoctorForm)
+  const [isSavingDoctor, setIsSavingDoctor] = useState(false)
+  const [doctorFormError, setDoctorFormError] = useState('')
 
   const today = useMemo(
     () =>
@@ -29,6 +95,27 @@ function AdminPage() {
       }).format(new Date()),
     [],
   )
+
+  useEffect(() => {
+    if (!isAuthed) {
+      return undefined
+    }
+
+    const unsubscribe = onValue(
+      databaseRef(database, 'doctors'),
+      (snapshot) => {
+        setDoctors(mapDoctors(snapshot))
+        setIsDoctorsLoading(false)
+        setDoctorsError('')
+      },
+      (firebaseError) => {
+        setDoctorsError(firebaseError.message)
+        setIsDoctorsLoading(false)
+      },
+    )
+
+    return unsubscribe
+  }, [isAuthed])
 
   function handleLogin(event) {
     event.preventDefault()
@@ -50,6 +137,42 @@ function AdminPage() {
     sessionStorage.removeItem('carequeue-admin')
     setIsAuthed(false)
     setFormData({ username: '', password: '' })
+  }
+
+  function updateDoctorField(field, value) {
+    setDoctorForm((current) => ({ ...current, [field]: value }))
+  }
+
+  async function handleDoctorSubmit(event) {
+    event.preventDefault()
+    setDoctorFormError('')
+    setIsSavingDoctor(true)
+
+    try {
+      const appointmentsPerDay = Number(doctorForm.appointmentsPerDay)
+
+      if (!Number.isFinite(appointmentsPerDay) || appointmentsPerDay <= 0) {
+        throw new Error('Enter a valid number of appointments per day')
+      }
+
+      await push(databaseRef(database, 'doctors'), {
+        name: doctorForm.name.trim(),
+        department: doctorForm.department.trim(),
+        mobile: doctorForm.mobile.trim(),
+        startTime: doctorForm.startTime,
+        endTime: doctorForm.endTime,
+        appointmentsPerDay,
+        status: 'Consulting',
+        createdAt: serverTimestamp(),
+      })
+
+      setDoctorForm(emptyDoctorForm)
+      setIsDoctorFormOpen(false)
+    } catch (submitError) {
+      setDoctorFormError(submitError.message)
+    } finally {
+      setIsSavingDoctor(false)
+    }
   }
 
   if (!isAuthed) {
@@ -121,54 +244,250 @@ function AdminPage() {
         </div>
       </aside>
 
-      <section className="admin-workspace">
-        <header className="admin-topbar">
-          <div>
-            <p>{today}</p>
-            <h1>{activeItem}</h1>
-          </div>
-          <button type="button" onClick={handleLogout}>
-            Logout
-          </button>
-        </header>
-
-        <section className="admin-stat-grid" aria-label="Dashboard summary">
-          <article>
-            <span>Patients today</span>
-            <strong>128</strong>
-            <p>24 waiting now</p>
-          </article>
-          <article>
-            <span>Active doctors</span>
-            <strong>8</strong>
-            <p>3 departments live</p>
-          </article>
-          <article>
-            <span>Avg wait</span>
-            <strong>18m</strong>
-            <p>Down 6m from yesterday</p>
-          </article>
-        </section>
-
-        <section className="admin-panel">
-          <div className="admin-panel-header">
-            <h2>Live queues</h2>
-            <span>Auto refresh ready</span>
-          </div>
-
-          <div className="admin-table">
-            {queueRows.map((row) => (
-              <div className="admin-table-row" key={row.token}>
-                <strong>{row.token}</strong>
-                <span>{row.patient}</span>
-                <span>{row.department}</span>
-                <em>{row.status}</em>
-              </div>
-            ))}
-          </div>
-        </section>
+      <section
+        className={`admin-workspace ${activeItem === 'Doctors' ? 'admin-workspace-doctors' : ''}`}
+      >
+        {activeItem === 'Doctors' ? (
+          <DoctorManagement
+            doctorForm={doctorForm}
+            doctorFormError={doctorFormError}
+            doctors={doctors}
+            doctorsError={doctorsError}
+            isDoctorFormOpen={isDoctorFormOpen}
+            isDoctorsLoading={isDoctorsLoading}
+            isSavingDoctor={isSavingDoctor}
+            onCloseForm={() => {
+              setIsDoctorFormOpen(false)
+              setDoctorFormError('')
+            }}
+            onOpenForm={() => setIsDoctorFormOpen(true)}
+            onSubmit={handleDoctorSubmit}
+            onUpdateField={updateDoctorField}
+          />
+        ) : (
+          <DashboardOverview activeItem={activeItem} onLogout={handleLogout} today={today} />
+        )}
       </section>
     </main>
+  )
+}
+
+function DashboardOverview({ activeItem, onLogout, today }) {
+  return (
+    <>
+      <header className="admin-topbar">
+        <div>
+          <p>{today}</p>
+          <h1>{activeItem}</h1>
+        </div>
+        <button type="button" onClick={onLogout}>
+          Logout
+        </button>
+      </header>
+
+      <section className="admin-stat-grid" aria-label="Dashboard summary">
+        <article>
+          <span>Patients today</span>
+          <strong>128</strong>
+          <p>24 waiting now</p>
+        </article>
+        <article>
+          <span>Active doctors</span>
+          <strong>8</strong>
+          <p>3 departments live</p>
+        </article>
+        <article>
+          <span>Avg wait</span>
+          <strong>18m</strong>
+          <p>Down 6m from yesterday</p>
+        </article>
+      </section>
+
+      <section className="admin-panel">
+        <div className="admin-panel-header">
+          <h2>Live queues</h2>
+          <span>Auto refresh ready</span>
+        </div>
+
+        <div className="admin-table">
+          {queueRows.map((row) => (
+            <div className="admin-table-row" key={row.token}>
+              <strong>{row.token}</strong>
+              <span>{row.patient}</span>
+              <span>{row.department}</span>
+              <em>{row.status}</em>
+            </div>
+          ))}
+        </div>
+      </section>
+    </>
+  )
+}
+
+function DoctorManagement({
+  doctorForm,
+  doctorFormError,
+  doctors,
+  doctorsError,
+  isDoctorFormOpen,
+  isDoctorsLoading,
+  isSavingDoctor,
+  onCloseForm,
+  onOpenForm,
+  onSubmit,
+  onUpdateField,
+}) {
+  return (
+    <section className="doctor-management">
+      <header className="doctor-management-header">
+        <h1>Doctor management</h1>
+        <button type="button" onClick={onOpenForm}>
+          + Add doctor
+        </button>
+      </header>
+
+      {isDoctorFormOpen && (
+        <form className="doctor-form" onSubmit={onSubmit}>
+          <div className="doctor-form-header">
+            <h2>Add doctor</h2>
+            <button type="button" onClick={onCloseForm}>
+              Close
+            </button>
+          </div>
+
+          <div className="doctor-form-grid">
+            <label>
+              Doctor name
+              <input
+                required
+                value={doctorForm.name}
+                onChange={(event) => onUpdateField('name', event.target.value)}
+                placeholder="Dr. Rajan Suresh"
+              />
+            </label>
+
+            <label>
+              Doctor department
+              <input
+                required
+                value={doctorForm.department}
+                onChange={(event) => onUpdateField('department', event.target.value)}
+                placeholder="General OPD"
+              />
+            </label>
+
+            <label>
+              Mobile number
+              <input
+                required
+                inputMode="tel"
+                value={doctorForm.mobile}
+                onChange={(event) => onUpdateField('mobile', event.target.value)}
+                placeholder="9876543210"
+              />
+            </label>
+
+            <label>
+              Starting time
+              <input
+                required
+                type="time"
+                value={doctorForm.startTime}
+                onChange={(event) => onUpdateField('startTime', event.target.value)}
+              />
+            </label>
+
+            <label>
+              Ending time
+              <input
+                required
+                type="time"
+                value={doctorForm.endTime}
+                onChange={(event) => onUpdateField('endTime', event.target.value)}
+              />
+            </label>
+
+            <label>
+              No. of / day
+              <input
+                required
+                min="1"
+                type="number"
+                value={doctorForm.appointmentsPerDay}
+                onChange={(event) => onUpdateField('appointmentsPerDay', event.target.value)}
+                placeholder="18"
+              />
+            </label>
+          </div>
+
+          {doctorFormError && <p className="doctor-form-error">{doctorFormError}</p>}
+
+          <button className="doctor-form-submit" disabled={isSavingDoctor} type="submit">
+            {isSavingDoctor ? 'Saving...' : 'Submit doctor'}
+          </button>
+        </form>
+      )}
+
+      {doctorsError && <p className="doctor-data-error">{doctorsError}</p>}
+
+      {isDoctorsLoading ? (
+        <div className="doctor-empty-state">Loading doctors...</div>
+      ) : doctors.length === 0 ? (
+        <div className="doctor-empty-state">
+          <h2>No doctors added</h2>
+          <p>Add your first doctor to start managing daily appointments.</p>
+          <button type="button" onClick={onOpenForm}>
+            + Add doctor
+          </button>
+        </div>
+      ) : (
+        <div className="doctor-list">
+          {doctors.map((doctor) => (
+            <DoctorCard doctor={doctor} key={doctor.id} />
+          ))}
+        </div>
+      )}
+    </section>
+  )
+}
+
+function DoctorCard({ doctor }) {
+  const appointmentsPerDay = Number(doctor.appointmentsPerDay) || 0
+
+  return (
+    <article className="doctor-card">
+      <div className="doctor-card-main">
+        <div className="doctor-avatar">{getInitials(doctor.name || 'Doctor')}</div>
+        <div>
+          <h2>{doctor.name}</h2>
+          <p>
+            {doctor.department} · {formatTimeRange(doctor.startTime, doctor.endTime)}
+          </p>
+          <span>{doctor.mobile}</span>
+        </div>
+      </div>
+
+      <div className="doctor-status">{doctor.status || 'Consulting'}</div>
+
+      <div className="doctor-metrics">
+        <div>
+          <strong>0</strong>
+          <span>Seen</span>
+        </div>
+        <div>
+          <strong className="doctor-waiting-count">0</strong>
+          <span>Waiting</span>
+        </div>
+        <div>
+          <strong>{appointmentsPerDay}</strong>
+          <span>Appts</span>
+        </div>
+        <div>
+          <strong>{getAverageSlot(doctor.startTime, doctor.endTime, appointmentsPerDay)}</strong>
+          <span>Avg time</span>
+        </div>
+      </div>
+    </article>
   )
 }
 

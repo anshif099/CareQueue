@@ -177,6 +177,12 @@
   padding: 28px;
 }
 
+.admin-workspace-doctors {
+  background: #2b2c29;
+  gap: 0;
+  padding: 22px 18px;
+}
+
 .admin-topbar {
   display: flex;
   align-items: center;
@@ -292,6 +298,245 @@
   padding: 6px 10px;
 }
 
+.doctor-management {
+  width: min(100%, 940px);
+  display: grid;
+  gap: 10px;
+}
+
+.doctor-management-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 8px;
+}
+
+.doctor-management-header h1 {
+  color: #f3f3ef;
+  font-size: 20px;
+  font-weight: 850;
+  line-height: 1.2;
+  margin: 0;
+}
+
+.doctor-management-header button,
+.doctor-empty-state button,
+.doctor-form-submit,
+.doctor-form-header button {
+  min-height: 34px;
+  border: 1px solid #6b6c67;
+  border-radius: 9px;
+  background: transparent;
+  color: #f4f4ef;
+  cursor: pointer;
+  font-weight: 850;
+  padding: 0 14px;
+}
+
+.doctor-form {
+  border: 1px solid #4b4c48;
+  border-radius: 12px;
+  background: #242522;
+  display: grid;
+  gap: 16px;
+  margin-bottom: 10px;
+  padding: 16px;
+}
+
+.doctor-form-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.doctor-form-header h2 {
+  color: #f4f4ef;
+  font-size: 17px;
+  margin: 0;
+}
+
+.doctor-form-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.doctor-form label {
+  color: #c5c5bd;
+  display: grid;
+  gap: 7px;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.doctor-form input {
+  width: 100%;
+  min-height: 42px;
+  border: 1px solid #51524d;
+  border-radius: 9px;
+  background: #1f201e;
+  color: #f5f5ef;
+  font: inherit;
+  padding: 0 12px;
+  outline: none;
+}
+
+.doctor-form input:focus {
+  border-color: #dcecff;
+  box-shadow: 0 0 0 3px rgba(220, 236, 255, 0.1);
+}
+
+.doctor-form-error,
+.doctor-data-error {
+  color: #ffd7d7;
+  font-weight: 800;
+  margin: 0;
+}
+
+.doctor-form-submit {
+  justify-self: start;
+  background: #dfedf8;
+  border-color: #dfedf8;
+  color: #134d85;
+}
+
+.doctor-empty-state {
+  min-height: 260px;
+  border: 1px dashed #585955;
+  border-radius: 12px;
+  color: #c7c7bf;
+  display: grid;
+  gap: 10px;
+  place-items: center;
+  align-content: center;
+  padding: 24px;
+  text-align: center;
+}
+
+.doctor-empty-state h2,
+.doctor-empty-state p {
+  margin: 0;
+}
+
+.doctor-empty-state h2 {
+  color: #f4f4ef;
+  font-size: 20px;
+}
+
+.doctor-list {
+  display: grid;
+  gap: 10px;
+}
+
+.doctor-card {
+  position: relative;
+  min-height: 130px;
+  border: 1px solid #4b4c48;
+  border-radius: 12px;
+  background: #2b2c29;
+  display: grid;
+  gap: 10px;
+  padding: 12px 15px;
+}
+
+.doctor-card-main {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  padding-right: 110px;
+}
+
+.doctor-avatar {
+  width: 43px;
+  height: 43px;
+  border-radius: 999px;
+  background: #e2f0ff;
+  color: #135187;
+  display: grid;
+  flex: 0 0 auto;
+  font-size: 14px;
+  font-weight: 900;
+  place-items: center;
+}
+
+.doctor-card h2,
+.doctor-card p,
+.doctor-card span {
+  margin: 0;
+}
+
+.doctor-card h2 {
+  color: #f4f4ef;
+  font-size: 16px;
+  font-weight: 850;
+  line-height: 1.15;
+}
+
+.doctor-card p {
+  color: #c2c2bb;
+  font-size: 14px;
+  font-weight: 750;
+  line-height: 1.2;
+}
+
+.doctor-card-main span {
+  color: #8f9189;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.doctor-status {
+  position: absolute;
+  top: 23px;
+  right: 15px;
+  border-radius: 999px;
+  background: #efffe6;
+  color: #326018;
+  font-size: 12px;
+  font-weight: 900;
+  line-height: 1;
+  padding: 5px 10px;
+}
+
+.doctor-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.doctor-metrics div {
+  min-height: 51px;
+  border-radius: 7px;
+  background: #232421;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 3px;
+  padding: 7px 8px;
+  text-align: center;
+}
+
+.doctor-metrics strong {
+  color: #f1f1ec;
+  font-size: 14px;
+  line-height: 1;
+}
+
+.doctor-metrics span {
+  color: #c5c5bd;
+  font-size: 13px;
+  font-weight: 850;
+  line-height: 1;
+}
+
+.doctor-waiting-count {
+  color: #d13838 !important;
+}
+
 @media (max-width: 760px) {
   .admin-shell {
     flex-direction: column;
@@ -316,8 +561,26 @@
     padding: 20px 16px;
   }
 
+  .admin-workspace-doctors {
+    padding: 20px 16px;
+  }
+
   .admin-stat-grid,
   .admin-table-row {
     grid-template-columns: 1fr;
+  }
+
+  .doctor-form-grid,
+  .doctor-metrics {
+    grid-template-columns: 1fr;
+  }
+
+  .doctor-card-main {
+    padding-right: 0;
+  }
+
+  .doctor-status {
+    position: static;
+    justify-self: start;
   }
 }
