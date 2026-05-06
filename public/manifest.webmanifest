@@ -8,8 +8,8 @@
   "display": "fullscreen",
   "display_override": ["fullscreen", "standalone", "minimal-ui"],
   "orientation": "portrait",
-  "background_color": "#1f66a5",
-  "theme_color": "#1f66a5",
+  "background_color": "#216ba9",
+  "theme_color": "#216ba9",
   "lang": "en",
   "prefer_related_applications": false,
   "icons": [
