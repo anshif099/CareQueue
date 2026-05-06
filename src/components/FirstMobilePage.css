@@ -1,4 +1,6 @@
 .carequeue-app {
+  width: 100%;
+  height: 100dvh;
   min-height: 100dvh;
   background: #216ba9;
   color: #f5fbff;
@@ -9,6 +11,7 @@
   --content-width: min(258px, calc(100vw - 44px));
 
   width: 100vw;
+  height: 100dvh;
   min-height: 100dvh;
   background: #216ba9;
   display: flex;

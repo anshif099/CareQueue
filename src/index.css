@@ -16,14 +16,20 @@
 
 html {
   min-width: 320px;
+  min-height: 100%;
   background: #216ba9;
+  overscroll-behavior: none;
 }
 
 body {
   min-width: 320px;
+  width: 100%;
   min-height: 100dvh;
   margin: 0;
-  overflow-x: hidden;
+  background: #216ba9;
+  overflow: hidden;
+  overscroll-behavior: none;
+  touch-action: manipulation;
 }
 
 button {
@@ -31,5 +37,7 @@ button {
 }
 
 #root {
+  width: 100%;
   min-height: 100dvh;
+  background: #216ba9;
 }
