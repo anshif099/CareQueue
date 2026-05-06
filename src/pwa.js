@@ -1,5 +1,8 @@
 export function registerServiceWorker() {
-  if (!('serviceWorker' in navigator) || !import.meta.env.PROD) {
+  const isLocalhost = ['localhost', '127.0.0.1', '[::1]'].includes(window.location.hostname)
+  const canRegister = 'serviceWorker' in navigator && (window.isSecureContext || isLocalhost)
+
+  if (!canRegister) {
     return
   }
 
