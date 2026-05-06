@@ -38,6 +38,20 @@ const translations = {
     fullyBooked: 'Fully booked',
     confirmAppointment: 'Confirm appointment',
     walkInToken: 'Get walk-in token instead',
+    tokenIssued: 'Token issued',
+    tokenNumber: 'TOKEN NUMBER',
+    ahead: 'Ahead',
+    wait: 'Wait',
+    serving: 'Serving',
+    doctor: 'Doctor',
+    department: 'Department',
+    counter: 'Counter',
+    prescription: 'Prescription',
+    digitalCopySent: 'Digital copy sent',
+    smsAlerts: 'SMS alerts on',
+    qrCounter: 'QR for counter',
+    pharmacyLinked: 'Pharmacy linked',
+    shareFamily: 'Share with family',
   },
   hi: {
     clinic: 'सिटी हेल्थ क्लिनिक',
@@ -122,6 +136,20 @@ const translations = {
     fullyBooked: 'முழுவதும் பதிவு செய்யப்பட்டது',
     confirmAppointment: 'அப்பாயிண்ட்மெண்ட் உறுதி செய்யவும்',
     walkInToken: 'வாக்-இன் டோக்கன் பெறவும்',
+    tokenIssued: 'டோக்கன் வழங்கப்பட்டது',
+    tokenNumber: 'டோக்கன் எண்',
+    ahead: 'முன்னால்',
+    wait: 'காத்திருப்பு',
+    serving: 'சேவை',
+    doctor: 'மருத்துவர்',
+    department: 'துறை',
+    counter: 'கவுண்டர்',
+    prescription: 'மருந்துச்சீட்டு',
+    digitalCopySent: 'டிஜிட்டல் நகல் அனுப்பப்பட்டது',
+    smsAlerts: 'SMS அறிவிப்புகள் ஆன்',
+    qrCounter: 'கவுண்டருக்கான QR',
+    pharmacyLinked: 'பார்மசி இணைக்கப்பட்டது',
+    shareFamily: 'குடும்பத்துடன் பகிரவும்',
   },
 }
 
@@ -262,6 +290,12 @@ function getMonthDays() {
   ]
 }
 
+function getTokenNumber(doctor, slot) {
+  const base = `${doctor?.id ?? 'doctor'}-${slot ?? 'slot'}`
+  const number = Array.from(base).reduce((total, letter) => total + letter.charCodeAt(0), 0)
+  return `G-${String((number % 90) + 10).padStart(3, '0')}`
+}
+
 function mapDoctors(snapshot) {
   const doctors = snapshot.val()
 
@@ -319,6 +353,7 @@ function FirstMobilePage() {
   const [screen, setScreen] = useState('language')
   const [selectedDepartment, setSelectedDepartment] = useState(null)
   const [selectedDoctor, setSelectedDoctor] = useState(null)
+  const [issuedAppointment, setIssuedAppointment] = useState(null)
   const [doctors, setDoctors] = useState([])
   const [isDepartmentsLoading, setIsDepartmentsLoading] = useState(true)
   const [departmentsError, setDepartmentsError] = useState('')
@@ -328,7 +363,7 @@ function FirstMobilePage() {
     [selectedLanguage],
   )
 
-  const text = translations[selectedLanguage] ?? translations.en
+  const text = { ...translations.en, ...(translations[selectedLanguage] ?? {}) }
   const departments = useMemo(() => groupDepartments(doctors), [doctors])
 
   useEffect(() => {
@@ -407,10 +442,22 @@ function FirstMobilePage() {
             text={text}
             time={time}
           />
-        ) : (
+        ) : screen === 'booking' ? (
           <BookingPage
             doctor={selectedDoctor}
             onBack={() => setScreen('doctors')}
+            onConfirm={(appointment) => {
+              setIssuedAppointment(appointment)
+              setScreen('token')
+            }}
+            text={text}
+            time={time}
+          />
+        ) : (
+          <TokenIssuedPage
+            appointment={issuedAppointment}
+            doctor={selectedDoctor}
+            onBack={() => setScreen('booking')}
             text={text}
             time={time}
           />
@@ -633,7 +680,7 @@ function DoctorChoiceCard({ doctor, isUnavailable = false, onChooseDoctor, text 
   )
 }
 
-function BookingPage({ doctor, onBack, text, time }) {
+function BookingPage({ doctor, onBack, onConfirm, text, time }) {
   const slots = useMemo(() => getAppointmentSlots(doctor), [doctor])
   const [selectedDay, setSelectedDay] = useState(2)
   const [selectedSlot, setSelectedSlot] = useState(() => slots.find((slot) => !slot.isFull)?.value)
@@ -723,12 +770,96 @@ function BookingPage({ doctor, onBack, text, time }) {
           </span>
         </div>
 
-        <button className="booking-confirm" type="button">
+        <button
+          className="booking-confirm"
+          type="button"
+          onClick={() =>
+            onConfirm({
+              slot: selectedSlotLabel,
+              token: getTokenNumber(doctor, selectedSlotValue),
+            })
+          }
+        >
           {text.confirmAppointment} — {selectedSlotLabel}
         </button>
 
         <button className="booking-walkin" type="button" disabled>
           {text.walkInToken}
+        </button>
+      </section>
+    </div>
+  )
+}
+
+function TokenIssuedPage({ appointment, doctor, onBack, text, time }) {
+  const waitMinutes = getAverageSlotMinutes(doctor?.startTime, doctor?.endTime, doctor?.appointmentsPerDay)
+  const aheadCount = Math.max(7, getDoctorWait(doctor))
+  const token = appointment?.token ?? getTokenNumber(doctor, appointment?.slot)
+
+  return (
+    <div className="token-page">
+      <header className="department-hero token-hero">
+        <div className="department-hero-bar">
+          <div className="department-status">{time}</div>
+          <button className="department-back-button" type="button" onClick={onBack} aria-label="Go back">
+            ←
+          </button>
+        </div>
+        <h1>{text.tokenIssued}</h1>
+        <p>
+          {doctor?.department} · {doctor?.name}
+        </p>
+      </header>
+
+      <section className="token-content">
+        <div className="token-number-card">
+          <p>{text.tokenNumber}</p>
+          <strong>{token}</strong>
+          <span>{doctor?.department} · Counter 2</span>
+        </div>
+
+        <div className="token-summary">
+          <div>
+            <strong>{aheadCount}</strong>
+            <span>{text.ahead}</span>
+          </div>
+          <div>
+            <strong>~{waitMinutes}m</strong>
+            <span>{text.wait}</span>
+          </div>
+          <div>
+            <strong>G-017</strong>
+            <span>{text.serving}</span>
+          </div>
+        </div>
+
+        <div className="token-details">
+          <div>
+            <span>{text.doctor}</span>
+            <strong>{doctor?.name}</strong>
+          </div>
+          <div>
+            <span>{text.department}</span>
+            <strong>{doctor?.department}</strong>
+          </div>
+          <div>
+            <span>{text.counter}</span>
+            <strong>Counter 2</strong>
+          </div>
+          <div>
+            <span>{text.prescription}</span>
+            <strong>{text.digitalCopySent}</strong>
+          </div>
+        </div>
+
+        <div className="token-badges">
+          <span>{text.smsAlerts}</span>
+          <span>{text.qrCounter}</span>
+          <span>{text.pharmacyLinked}</span>
+        </div>
+
+        <button className="token-share" disabled type="button">
+          {text.shareFamily}
         </button>
       </section>
     </div>
