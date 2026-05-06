@@ -1,5 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
-import { onValue, ref as databaseRef } from 'firebase/database'
+import {
+  onValue,
+  push,
+  ref as databaseRef,
+  runTransaction,
+  serverTimestamp,
+  set as setDatabaseValue,
+} from 'firebase/database'
 import { database } from '../lib/firebase.jsx'
 import './FirstMobilePage.css'
 
@@ -52,6 +59,9 @@ const translations = {
     qrCounter: 'QR for counter',
     pharmacyLinked: 'Pharmacy linked',
     shareFamily: 'Share with family',
+    shareCopied: 'Token details copied',
+    shareShared: 'Shared',
+    shareFailed: 'Share not available',
   },
   hi: {
     clinic: 'सिटी हेल्थ क्लिनिक',
@@ -333,10 +343,123 @@ function formatSelectedDateTitle(date) {
     .toUpperCase()
 }
 
-function getTokenNumber(doctor, slot) {
-  const base = `${doctor?.id ?? 'doctor'}-${slot ?? 'slot'}`
-  const number = Array.from(base).reduce((total, letter) => total + letter.charCodeAt(0), 0)
-  return `G-${String((number % 90) + 10).padStart(3, '0')}`
+function getDateKey(date) {
+  return [
+    date.getFullYear(),
+    String(date.getMonth() + 1).padStart(2, '0'),
+    String(date.getDate()).padStart(2, '0'),
+  ].join('-')
+}
+
+function getTokenPrefix(doctor) {
+  const source = `${doctor?.department ?? ''}${doctor?.name ?? ''}`
+  return source.match(/[A-Za-z]/)?.[0]?.toUpperCase() ?? 'T'
+}
+
+function getTokenNumber(doctor, sequence) {
+  return `${getTokenPrefix(doctor)}-${String(Number(sequence) || 1).padStart(3, '0')}`
+}
+
+function getDoctorCounter(doctor) {
+  if (doctor?.counter) {
+    return doctor.counter
+  }
+
+  if (doctor?.counterName) {
+    return doctor.counterName
+  }
+
+  const source = doctor?.id ?? doctor?.name ?? 'doctor'
+  const counterNumber =
+    (Array.from(source).reduce((total, letter) => total + letter.charCodeAt(0), 0) % 4) + 1
+  return `Counter ${counterNumber}`
+}
+
+async function copyTextToClipboard(text) {
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(text)
+    return
+  }
+
+  const copyArea = document.createElement('textarea')
+  copyArea.value = text
+  copyArea.setAttribute('readonly', '')
+  copyArea.style.position = 'fixed'
+  copyArea.style.opacity = '0'
+  document.body.append(copyArea)
+  copyArea.select()
+  document.execCommand('copy')
+  copyArea.remove()
+}
+
+function isActiveAppointment(appointment) {
+  const status = String(appointment?.status ?? 'waiting').toLowerCase()
+  return !['completed', 'done', 'cancelled', 'canceled'].includes(status)
+}
+
+function compareAppointments(firstAppointment, secondAppointment) {
+  const firstSequence = Number(firstAppointment.sequence) || Number.MAX_SAFE_INTEGER
+  const secondSequence = Number(secondAppointment.sequence) || Number.MAX_SAFE_INTEGER
+
+  if (firstSequence !== secondSequence) {
+    return firstSequence - secondSequence
+  }
+
+  return (Number(firstAppointment.createdAt) || 0) - (Number(secondAppointment.createdAt) || 0)
+}
+
+function getDoctorQueue(doctor, appointments, dateKey) {
+  if (!doctor?.id) {
+    return []
+  }
+
+  return appointments
+    .filter(
+      (appointment) =>
+        appointment.doctorId === doctor.id &&
+        appointment.dateKey === dateKey &&
+        isActiveAppointment(appointment),
+    )
+    .sort(compareAppointments)
+}
+
+function getCompletedCount(doctor, appointments, dateKey) {
+  if (!doctor?.id) {
+    return 0
+  }
+
+  return appointments.filter(
+    (appointment) =>
+      appointment.doctorId === doctor.id &&
+      appointment.dateKey === dateKey &&
+      String(appointment.status ?? '').toLowerCase() === 'completed',
+  ).length
+}
+
+function mapAppointments(snapshot) {
+  const appointments = snapshot.val()
+
+  if (!appointments) {
+    return []
+  }
+
+  return Object.entries(appointments)
+    .map(([id, appointment]) => ({ id, ...appointment }))
+    .sort(compareAppointments)
+}
+
+function enrichDoctorsWithLiveQueues(doctors, appointments, dateKey) {
+  return doctors.map((doctor) => {
+    const queue = getDoctorQueue(doctor, appointments, dateKey)
+    const completedCount = getCompletedCount(doctor, appointments, dateKey)
+
+    return {
+      ...doctor,
+      seen: Number(doctor.seen) || completedCount,
+      servingToken: doctor.servingToken || doctor.currentToken || queue[0]?.token || '',
+      waiting: queue.length,
+    }
+  })
 }
 
 function mapDoctors(snapshot) {
@@ -398,6 +521,7 @@ function FirstMobilePage() {
   const [selectedDoctor, setSelectedDoctor] = useState(null)
   const [issuedAppointment, setIssuedAppointment] = useState(null)
   const [doctors, setDoctors] = useState([])
+  const [appointments, setAppointments] = useState([])
   const [isDepartmentsLoading, setIsDepartmentsLoading] = useState(true)
   const [departmentsError, setDepartmentsError] = useState('')
 
@@ -407,7 +531,16 @@ function FirstMobilePage() {
   )
 
   const text = { ...translations.en, ...(translations[selectedLanguage] ?? {}) }
-  const departments = useMemo(() => groupDepartments(doctors), [doctors])
+  const todayDateKey = getDateKey(new Date())
+  const liveDoctors = useMemo(
+    () => enrichDoctorsWithLiveQueues(doctors, appointments, todayDateKey),
+    [appointments, doctors, todayDateKey],
+  )
+  const selectedLiveDoctor = useMemo(
+    () => liveDoctors.find((doctor) => doctor.id === selectedDoctor?.id) ?? selectedDoctor,
+    [liveDoctors, selectedDoctor],
+  )
+  const departments = useMemo(() => groupDepartments(liveDoctors), [liveDoctors])
 
   useEffect(() => {
     const timer = window.setInterval(() => {
@@ -433,6 +566,66 @@ function FirstMobilePage() {
 
     return unsubscribe
   }, [])
+
+  useEffect(() => {
+    const unsubscribe = onValue(databaseRef(database, 'appointments'), (snapshot) => {
+      setAppointments(mapAppointments(snapshot))
+    })
+
+    return unsubscribe
+  }, [])
+
+  async function handleConfirmAppointment(appointment) {
+    if (!selectedLiveDoctor?.id) {
+      throw new Error('Doctor details are not available')
+    }
+
+    const dateKey = appointment.dateKey
+    const counterResult = await runTransaction(
+      databaseRef(database, `queueCounters/${dateKey}/${selectedLiveDoctor.id}`),
+      (currentSequence) => (Number(currentSequence) || 0) + 1,
+    )
+
+    if (!counterResult.committed) {
+      throw new Error('Token could not be issued. Please try again.')
+    }
+
+    const sequence = Number(counterResult.snapshot.val()) || 1
+    const token = getTokenNumber(selectedLiveDoctor, sequence)
+    const counter = getDoctorCounter(selectedLiveDoctor)
+    const queueAhead = getDoctorQueue(selectedLiveDoctor, appointments, dateKey).length
+    const averageSlotMinutes = getAverageSlotMinutes(
+      selectedLiveDoctor.startTime,
+      selectedLiveDoctor.endTime,
+      selectedLiveDoctor.appointmentsPerDay,
+    )
+    const appointmentRef = push(databaseRef(database, 'appointments'))
+    const issuedAt = Date.now()
+    const savedAppointment = {
+      id: appointmentRef.key,
+      doctorId: selectedLiveDoctor.id,
+      doctorName: selectedLiveDoctor.name ?? '',
+      department: selectedLiveDoctor.department ?? '',
+      dateKey,
+      slot: appointment.slot,
+      slotValue: appointment.slotValue,
+      token,
+      sequence,
+      counter,
+      status: 'waiting',
+      aheadAtBooking: queueAhead,
+      estimatedWaitMinutes: queueAhead * averageSlotMinutes,
+      issuedAt,
+      createdAt: serverTimestamp(),
+    }
+
+    await setDatabaseValue(appointmentRef, savedAppointment)
+
+    const localAppointment = { ...savedAppointment, createdAt: issuedAt }
+    setIssuedAppointment(localAppointment)
+    setScreen('token')
+    return localAppointment
+  }
 
   useEffect(() => {
     try {
@@ -476,7 +669,7 @@ function FirstMobilePage() {
         ) : screen === 'doctors' ? (
           <DoctorSelection
             department={selectedDepartment}
-            doctors={doctors}
+            doctors={liveDoctors}
             onChooseDoctor={(doctor) => {
               setSelectedDoctor(doctor)
               setScreen('booking')
@@ -487,19 +680,17 @@ function FirstMobilePage() {
           />
         ) : screen === 'booking' ? (
           <BookingPage
-            doctor={selectedDoctor}
+            doctor={selectedLiveDoctor}
             onBack={() => setScreen('doctors')}
-            onConfirm={(appointment) => {
-              setIssuedAppointment(appointment)
-              setScreen('token')
-            }}
+            onConfirm={handleConfirmAppointment}
             text={text}
             time={time}
           />
         ) : (
           <TokenIssuedPage
+            appointments={appointments}
             appointment={issuedAppointment}
-            doctor={selectedDoctor}
+            doctor={selectedLiveDoctor}
             onBack={() => setScreen('booking')}
             text={text}
             time={time}
@@ -728,6 +919,8 @@ function BookingPage({ doctor, onBack, onConfirm, text, time }) {
   const [selectedDate, setSelectedDate] = useState(today)
   const slots = useMemo(() => getAppointmentSlots(doctor, selectedDate), [doctor, selectedDate])
   const [selectedSlot, setSelectedSlot] = useState(() => slots[0]?.value)
+  const [isBooking, setIsBooking] = useState(false)
+  const [bookingError, setBookingError] = useState('')
   const firstAvailableSlot = slots[0]
   const selectedSlotValue = slots.some((slot) => slot.value === selectedSlot)
     ? selectedSlot
@@ -735,6 +928,27 @@ function BookingPage({ doctor, onBack, onConfirm, text, time }) {
   const selectedSlotLabel =
     slots.find((slot) => slot.value === selectedSlotValue)?.label ?? firstAvailableSlot?.label ?? ''
   const monthDays = useMemo(() => getMonthDays(today), [today])
+
+  async function handleConfirm() {
+    if (!selectedSlotValue) {
+      return
+    }
+
+    setIsBooking(true)
+    setBookingError('')
+
+    try {
+      await onConfirm({
+        dateKey: getDateKey(selectedDate),
+        slot: selectedSlotLabel,
+        slotValue: selectedSlotValue,
+      })
+    } catch (confirmError) {
+      setBookingError(confirmError.message)
+    } finally {
+      setIsBooking(false)
+    }
+  }
 
   return (
     <div className="booking-page">
@@ -820,17 +1034,14 @@ function BookingPage({ doctor, onBack, onConfirm, text, time }) {
 
         <button
           className="booking-confirm"
-          disabled={!selectedSlotValue}
+          disabled={!selectedSlotValue || isBooking}
           type="button"
-          onClick={() =>
-            onConfirm({
-              slot: selectedSlotLabel,
-              token: getTokenNumber(doctor, selectedSlotValue),
-            })
-          }
+          onClick={handleConfirm}
         >
-          {text.confirmAppointment} — {selectedSlotLabel || '--'}
+          {isBooking ? 'Issuing token...' : `${text.confirmAppointment} — ${selectedSlotLabel || '--'}`}
         </button>
+
+        {bookingError && <p className="department-message booking-error">{bookingError}</p>}
 
         <button className="booking-walkin" type="button" disabled>
           {text.walkInToken}
@@ -840,10 +1051,62 @@ function BookingPage({ doctor, onBack, onConfirm, text, time }) {
   )
 }
 
-function TokenIssuedPage({ appointment, doctor, onBack, text, time }) {
-  const waitMinutes = getAverageSlotMinutes(doctor?.startTime, doctor?.endTime, doctor?.appointmentsPerDay)
-  const aheadCount = Math.max(7, getDoctorWait(doctor))
-  const token = appointment?.token ?? getTokenNumber(doctor, appointment?.slot)
+function TokenIssuedPage({ appointment, appointments = [], doctor, onBack, text, time }) {
+  const [shareStatus, setShareStatus] = useState('')
+  const liveAppointment =
+    appointments.find((currentAppointment) => currentAppointment.id === appointment?.id) ??
+    appointment
+  const appointmentDateKey = liveAppointment?.dateKey ?? getDateKey(new Date())
+  const queue = getDoctorQueue(doctor, appointments, appointmentDateKey)
+  const queueWithCurrent =
+    liveAppointment && !queue.some((currentAppointment) => currentAppointment.id === liveAppointment.id)
+      ? [...queue, liveAppointment].sort(compareAppointments)
+      : queue
+  const appointmentIndex = queueWithCurrent.findIndex(
+    (currentAppointment) => currentAppointment.id === liveAppointment?.id,
+  )
+  const aheadCount =
+    appointmentIndex >= 0 ? appointmentIndex : Number(liveAppointment?.aheadAtBooking) || 0
+  const waitMinutes =
+    appointmentIndex >= 0
+      ? aheadCount *
+        getAverageSlotMinutes(doctor?.startTime, doctor?.endTime, doctor?.appointmentsPerDay)
+      : Number(liveAppointment?.estimatedWaitMinutes) || 0
+  const token = liveAppointment?.token ?? getTokenNumber(doctor, liveAppointment?.sequence)
+  const departmentName = liveAppointment?.department || doctor?.department || ''
+  const doctorName = liveAppointment?.doctorName || doctor?.name || ''
+  const counter = liveAppointment?.counter || getDoctorCounter(doctor)
+  const servingToken = queueWithCurrent[0]?.token || doctor?.servingToken || token
+  const shareText = [
+    `CareQueue token: ${token}`,
+    `Doctor: ${doctorName}`,
+    `Department: ${departmentName}`,
+    `Counter: ${counter}`,
+    `Slot: ${liveAppointment?.slot ?? 'Live queue'}`,
+    `Patients ahead: ${aheadCount}`,
+  ].join('\n')
+
+  async function handleShare() {
+    setShareStatus('')
+
+    try {
+      if (navigator.share) {
+        await navigator.share({
+          title: `CareQueue ${token}`,
+          text: shareText,
+        })
+        setShareStatus(text.shareShared)
+        return
+      }
+
+      await copyTextToClipboard(shareText)
+      setShareStatus(text.shareCopied)
+    } catch (shareError) {
+      if (shareError.name !== 'AbortError') {
+        setShareStatus(text.shareFailed)
+      }
+    }
+  }
 
   return (
     <div className="token-page">
@@ -856,7 +1119,7 @@ function TokenIssuedPage({ appointment, doctor, onBack, text, time }) {
         </div>
         <h1>{text.tokenIssued}</h1>
         <p>
-          {doctor?.department} · {doctor?.name}
+          {departmentName} · {doctorName}
         </p>
       </header>
 
@@ -864,7 +1127,9 @@ function TokenIssuedPage({ appointment, doctor, onBack, text, time }) {
         <div className="token-number-card">
           <p>{text.tokenNumber}</p>
           <strong>{token}</strong>
-          <span>{doctor?.department} · Counter 2</span>
+          <span>
+            {departmentName} · {counter}
+          </span>
         </div>
 
         <div className="token-summary">
@@ -877,7 +1142,7 @@ function TokenIssuedPage({ appointment, doctor, onBack, text, time }) {
             <span>{text.wait}</span>
           </div>
           <div>
-            <strong>G-017</strong>
+            <strong>{servingToken}</strong>
             <span>{text.serving}</span>
           </div>
         </div>
@@ -885,15 +1150,15 @@ function TokenIssuedPage({ appointment, doctor, onBack, text, time }) {
         <div className="token-details">
           <div>
             <span>{text.doctor}</span>
-            <strong>{doctor?.name}</strong>
+            <strong>{doctorName}</strong>
           </div>
           <div>
             <span>{text.department}</span>
-            <strong>{doctor?.department}</strong>
+            <strong>{departmentName}</strong>
           </div>
           <div>
             <span>{text.counter}</span>
-            <strong>Counter 2</strong>
+            <strong>{counter}</strong>
           </div>
           <div>
             <span>{text.prescription}</span>
@@ -907,8 +1172,8 @@ function TokenIssuedPage({ appointment, doctor, onBack, text, time }) {
           <span>{text.pharmacyLinked}</span>
         </div>
 
-        <button className="token-share" disabled type="button">
-          {text.shareFamily}
+        <button className="token-share" data-state={shareStatus ? 'done' : 'idle'} type="button" onClick={handleShare}>
+          {shareStatus || text.shareFamily}
         </button>
       </section>
     </div>

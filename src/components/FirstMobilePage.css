@@ -685,6 +685,10 @@
   cursor: default;
 }
 
+.booking-error {
+  margin-top: 10px;
+}
+
 .booking-walkin {
   border: 1px solid #eeeeee;
   background: #fff;
@@ -850,12 +854,19 @@
 .token-share {
   width: 100%;
   min-height: 44px;
-  border: 1px solid #eeeeee;
+  border: 1px solid #c7dff3;
   border-radius: 8px;
   background: #fff;
-  color: #f1f1f1;
+  color: #165d9c;
+  cursor: pointer;
   font-size: 16px;
   font-weight: 850;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.token-share[data-state='done'] {
+  background: #eef7ff;
+  border-color: #9bc9ef;
 }
 
 @media (max-height: 620px) {
