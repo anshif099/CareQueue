@@ -20,10 +20,17 @@ const emptyDoctorForm = {
   name: '',
   department: '',
   mobile: '',
-  startTime: '',
-  endTime: '',
+  startHour: '9',
+  startMinute: '00',
+  startPeriod: 'AM',
+  endHour: '5',
+  endMinute: '00',
+  endPeriod: 'PM',
   appointmentsPerDay: '',
 }
+
+const hourOptions = Array.from({ length: 12 }, (_, index) => String(index + 1))
+const minuteOptions = ['00', '15', '30', '45']
 
 function getInitials(name) {
   return name
@@ -40,7 +47,24 @@ function formatTimeRange(startTime, endTime) {
     return 'Time not set'
   }
 
-  return `${startTime} - ${endTime}`
+  return `${formatTime12(startTime)} - ${formatTime12(endTime)}`
+}
+
+function formatTime12(time) {
+  const [hourValue, minute] = time.split(':').map(Number)
+  const period = hourValue >= 12 ? 'PM' : 'AM'
+  const hour = hourValue % 12 || 12
+  return `${hour}:${String(minute).padStart(2, '0')} ${period}`
+}
+
+function to24HourTime(hour, minute, period) {
+  let hourValue = Number(hour) % 12
+
+  if (period === 'PM') {
+    hourValue += 12
+  }
+
+  return `${String(hourValue).padStart(2, '0')}:${minute}`
 }
 
 function getAverageSlot(startTime, endTime, appointmentsPerDay) {
@@ -159,8 +183,14 @@ function AdminPage() {
         name: doctorForm.name.trim(),
         department: doctorForm.department.trim(),
         mobile: doctorForm.mobile.trim(),
-        startTime: doctorForm.startTime,
-        endTime: doctorForm.endTime,
+        startTime: to24HourTime(
+          doctorForm.startHour,
+          doctorForm.startMinute,
+          doctorForm.startPeriod,
+        ),
+        endTime: to24HourTime(doctorForm.endHour, doctorForm.endMinute, doctorForm.endPeriod),
+        startTimeLabel: `${doctorForm.startHour}:${doctorForm.startMinute} ${doctorForm.startPeriod}`,
+        endTimeLabel: `${doctorForm.endHour}:${doctorForm.endMinute} ${doctorForm.endPeriod}`,
         appointmentsPerDay,
         status: 'Consulting',
         createdAt: serverTimestamp(),
@@ -389,21 +419,23 @@ function DoctorManagement({
 
             <label>
               Starting time
-              <input
-                required
-                type="time"
-                value={doctorForm.startTime}
-                onChange={(event) => onUpdateField('startTime', event.target.value)}
+              <TimeSelectGroup
+                hour={doctorForm.startHour}
+                minute={doctorForm.startMinute}
+                period={doctorForm.startPeriod}
+                prefix="start"
+                onUpdateField={onUpdateField}
               />
             </label>
 
             <label>
               Ending time
-              <input
-                required
-                type="time"
-                value={doctorForm.endTime}
-                onChange={(event) => onUpdateField('endTime', event.target.value)}
+              <TimeSelectGroup
+                hour={doctorForm.endHour}
+                minute={doctorForm.endMinute}
+                period={doctorForm.endPeriod}
+                prefix="end"
+                onUpdateField={onUpdateField}
               />
             </label>
 
@@ -448,6 +480,48 @@ function DoctorManagement({
         </div>
       )}
     </section>
+  )
+}
+
+function TimeSelectGroup({ hour, minute, onUpdateField, period, prefix }) {
+  return (
+    <div className="doctor-time-selects">
+      <select
+        value={hour}
+        onChange={(event) =>
+          onUpdateField(prefix === 'start' ? 'startHour' : 'endHour', event.target.value)
+        }
+      >
+        {hourOptions.map((option) => (
+          <option key={option} value={option}>
+            {option}
+          </option>
+        ))}
+      </select>
+
+      <select
+        value={minute}
+        onChange={(event) =>
+          onUpdateField(prefix === 'start' ? 'startMinute' : 'endMinute', event.target.value)
+        }
+      >
+        {minuteOptions.map((option) => (
+          <option key={option} value={option}>
+            {option}
+          </option>
+        ))}
+      </select>
+
+      <select
+        value={period}
+        onChange={(event) =>
+          onUpdateField(prefix === 'start' ? 'startPeriod' : 'endPeriod', event.target.value)
+        }
+      >
+        <option value="AM">AM</option>
+        <option value="PM">PM</option>
+      </select>
+    </div>
   )
 }
 

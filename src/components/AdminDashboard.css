@@ -375,7 +375,8 @@
   font-weight: 800;
 }
 
-.doctor-form input {
+.doctor-form input,
+.doctor-form select {
   width: 100%;
   min-height: 42px;
   border: 1px solid #51524d;
@@ -387,9 +388,16 @@
   outline: none;
 }
 
-.doctor-form input:focus {
+.doctor-form input:focus,
+.doctor-form select:focus {
   border-color: #dcecff;
   box-shadow: 0 0 0 3px rgba(220, 236, 255, 0.1);
+}
+
+.doctor-time-selects {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 8px;
 }
 
 .doctor-form-error,
