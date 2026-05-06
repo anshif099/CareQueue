@@ -1,8 +1,10 @@
 .carequeue-app {
+  position: fixed;
+  inset: 0;
   width: 100%;
   min-width: 100%;
-  height: 100dvh;
-  min-height: 100dvh;
+  height: 100%;
+  min-height: 100%;
   background: #216ba9;
   color: #f5fbff;
   display: flex;
@@ -12,8 +14,8 @@
   --content-width: min(258px, calc(100vw - 44px));
 
   width: 100%;
-  height: 100dvh;
-  min-height: 100dvh;
+  height: 100%;
+  min-height: 100%;
   background: #216ba9;
   display: flex;
   flex-direction: column;
