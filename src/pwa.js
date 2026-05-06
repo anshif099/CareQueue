@@ -10,20 +10,3 @@ export function registerServiceWorker() {
     navigator.serviceWorker.register('/sw.js').catch(() => {})
   })
 }
-
-export function enableImmersiveFullscreen() {
-  if (!document.fullscreenEnabled || document.fullscreenElement) {
-    return
-  }
-
-  const requestFullscreen = () => {
-    document.documentElement
-      .requestFullscreen({ navigationUI: 'hide' })
-      .catch(() => {})
-      .finally(() => {
-        window.removeEventListener('pointerdown', requestFullscreen)
-      })
-  }
-
-  window.addEventListener('pointerdown', requestFullscreen, { once: true })
-}

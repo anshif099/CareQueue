@@ -1,4 +1,4 @@
-const cacheName = 'carequeue-shell-v6'
+const cacheName = 'carequeue-shell-v7'
 const appShell = [
   '/',
   '/index.html',
