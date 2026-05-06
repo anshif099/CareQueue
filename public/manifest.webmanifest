@@ -1,0 +1,21 @@
+{
+  "name": "CareQueue",
+  "short_name": "CareQueue",
+  "description": "City Health Clinic mobile queue app",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
+  "orientation": "portrait",
+  "background_color": "#1f66a5",
+  "theme_color": "#1f66a5",
+  "lang": "en",
+  "icons": [
+    {
+      "src": "/logo.png",
+      "sizes": "1024x1536",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}

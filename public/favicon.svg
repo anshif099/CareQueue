@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-labelledby="title">
+  <title id="title">CareQueue</title>
+  <rect width="512" height="512" rx="116" fill="#1f66a5"/>
+  <rect x="138" y="118" width="236" height="236" rx="64" fill="#134f87"/>
+  <rect x="208" y="188" width="96" height="96" rx="24" fill="#2a77c8"/>
+  <path d="M256 205v62M225 236h62" stroke="#f5fbff" stroke-width="28" stroke-linecap="round"/>
+  <path d="M151 393h210" stroke="#9dcbf3" stroke-width="20" stroke-linecap="round" opacity=".92"/>
+</svg>
