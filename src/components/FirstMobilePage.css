@@ -230,15 +230,40 @@
     18px;
 }
 
+.department-hero-bar {
+  min-height: 34px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 8px;
+}
+
 .department-status {
   min-height: 24px;
   color: #d8edff;
   font-size: 14px;
   font-weight: 750;
   line-height: 24px;
-  margin-bottom: 18px;
   text-align: left;
   font-variant-numeric: tabular-nums;
+}
+
+.department-back-button {
+  width: 34px;
+  height: 34px;
+  border: 1px solid rgba(216, 237, 255, 0.48);
+  border-radius: 999px;
+  background: rgba(20, 84, 140, 0.3);
+  color: #fff;
+  cursor: pointer;
+  display: grid;
+  flex: 0 0 auto;
+  font-size: 20px;
+  font-weight: 850;
+  line-height: 1;
+  place-items: center;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .department-hero h1,

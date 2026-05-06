@@ -300,6 +300,7 @@ function FirstMobilePage() {
             departments={departments}
             error={departmentsError}
             isLoading={isDepartmentsLoading}
+            onBack={() => setScreen('language')}
             onSelectDepartment={(department) => {
               setSelectedDepartment(department)
               setScreen('doctors')
@@ -311,6 +312,7 @@ function FirstMobilePage() {
           <DoctorSelection
             department={selectedDepartment}
             doctors={doctors}
+            onBack={() => setScreen('departments')}
             text={text}
             time={time}
           />
@@ -380,11 +382,16 @@ function LanguageSelection({
   )
 }
 
-function DepartmentSelection({ departments, error, isLoading, onSelectDepartment, text, time }) {
+function DepartmentSelection({ departments, error, isLoading, onBack, onSelectDepartment, text, time }) {
   return (
     <div className="department-page">
       <header className="department-hero">
-        <div className="department-status">{time}</div>
+        <div className="department-hero-bar">
+          <div className="department-status">{time}</div>
+          <button className="department-back-button" type="button" onClick={onBack} aria-label="Go back">
+            ←
+          </button>
+        </div>
         <h1>{text.clinic}</h1>
         <p>{text.selectDepartment}</p>
       </header>
@@ -429,7 +436,7 @@ function DepartmentSelection({ departments, error, isLoading, onSelectDepartment
   )
 }
 
-function DoctorSelection({ department, doctors, text, time }) {
+function DoctorSelection({ department, doctors, onBack, text, time }) {
   const departmentDoctors = doctors.filter((doctor) => doctor.department === department?.name)
   const availableDoctors = departmentDoctors.filter(isDoctorAvailable)
   const unavailableDoctors = departmentDoctors.filter((doctor) => !isDoctorAvailable(doctor))
@@ -437,7 +444,12 @@ function DoctorSelection({ department, doctors, text, time }) {
   return (
     <div className="doctor-choice-page">
       <header className="department-hero">
-        <div className="department-status">{time}</div>
+        <div className="department-hero-bar">
+          <div className="department-status">{time}</div>
+          <button className="department-back-button" type="button" onClick={onBack} aria-label="Go back">
+            ←
+          </button>
+        </div>
         <h1>{department?.name ?? text.selectDepartment}</h1>
         <p>{text.chooseDoctor}</p>
       </header>
