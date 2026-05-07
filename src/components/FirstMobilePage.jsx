@@ -72,6 +72,18 @@ const translations = {
     consultationReady:
       'Please have your previous prescriptions and reports ready. Proceed to the waiting area outside {counter}.',
     delayTurn: 'I need more time - delay my turn',
+    home: 'Home',
+    appts: 'Appts',
+    records: 'Records',
+    notifications: 'Notifications',
+    bookings: 'Bookings',
+    noBookings: 'No bookings yet',
+    noNotifications: 'No notifications yet',
+    latestUpdate: 'Latest update',
+    viewToken: 'View token',
+    logout: 'Log out',
+    bookedFor: 'Booked for',
+    chooseDoctorFirst: 'Choose a doctor to book an appointment.',
     loginRegister: 'Register / Login',
     mobileNumber: 'Mobile number',
     mobilePlaceholder: 'Enter 10-digit mobile',
@@ -242,6 +254,14 @@ function saveUserSession(user) {
     window.localStorage.setItem(userStorageKey, JSON.stringify(user))
   } catch {
     // The current session still works when local storage is unavailable.
+  }
+}
+
+function clearUserSession() {
+  try {
+    window.localStorage.removeItem(userStorageKey)
+  } catch {
+    // Logging out still resets the current app state when storage is unavailable.
   }
 }
 
@@ -422,6 +442,44 @@ function getDateKey(date) {
   ].join('-')
 }
 
+function parseDateKey(dateKey) {
+  if (!dateKey) {
+    return null
+  }
+
+  const [year, month, day] = String(dateKey).split('-').map(Number)
+
+  if (!year || !month || !day) {
+    return null
+  }
+
+  return new Date(year, month - 1, day)
+}
+
+function formatDateKeyTitle(dateKey) {
+  const date = parseDateKey(dateKey)
+
+  if (!date) {
+    return 'Today'
+  }
+
+  return new Intl.DateTimeFormat(undefined, {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  }).format(date)
+}
+
+function getAppointmentSortTime(appointment) {
+  const issuedAt = Number(appointment?.issuedAt) || Number(appointment?.createdAt)
+
+  if (issuedAt) {
+    return issuedAt
+  }
+
+  return parseDateKey(appointment?.dateKey)?.getTime() ?? 0
+}
+
 function getTokenPrefix(doctor) {
   const source = `${doctor?.department ?? ''}${doctor?.name ?? ''}`
   return source.match(/[A-Za-z]/)?.[0]?.toUpperCase() ?? 'T'
@@ -587,6 +645,36 @@ function getLiveQueueStatus({ appointment, appointments = [], doctor }) {
   }
 }
 
+function isPatientAppointment(appointment, currentUser) {
+  if (!currentUser) {
+    return false
+  }
+
+  const patientMobile = normalizeMobileInput(appointment?.patientMobile)
+  const currentMobile = normalizeMobileInput(currentUser.mobile)
+
+  return (
+    appointment?.patientId === currentUser.id ||
+    (patientMobile.length === 10 && patientMobile === currentMobile)
+  )
+}
+
+function getFooterTab(screen) {
+  if (screen === 'booking') {
+    return 'appts'
+  }
+
+  if (screen === 'token' || screen === 'queue') {
+    return 'token'
+  }
+
+  if (screen === 'records') {
+    return 'records'
+  }
+
+  return 'home'
+}
+
 function mapDoctors(snapshot) {
   const doctors = snapshot.val()
 
@@ -639,10 +727,11 @@ function groupDepartments(doctors) {
 }
 
 function FirstMobilePage() {
+  const savedUser = useMemo(() => getInitialUser(), [])
   const [selectedLanguage, setSelectedLanguage] = useState(getInitialLanguage)
   const [time, setTime] = useState(getDeviceTime)
-  const [screen, setScreen] = useState('auth')
-  const [currentUser, setCurrentUser] = useState(getInitialUser)
+  const [screen, setScreen] = useState(savedUser ? 'departments' : 'auth')
+  const [currentUser, setCurrentUser] = useState(savedUser)
   const [selectedDepartment, setSelectedDepartment] = useState(null)
   const [selectedDoctor, setSelectedDoctor] = useState(null)
   const [issuedAppointment, setIssuedAppointment] = useState(null)
@@ -667,6 +756,24 @@ function FirstMobilePage() {
     [liveDoctors, selectedDoctor],
   )
   const departments = useMemo(() => groupDepartments(liveDoctors), [liveDoctors])
+  const patientAppointments = useMemo(
+    () =>
+      appointments
+        .filter((appointment) => isPatientAppointment(appointment, currentUser))
+        .sort((firstAppointment, secondAppointment) =>
+          getAppointmentSortTime(secondAppointment) - getAppointmentSortTime(firstAppointment),
+        ),
+    [appointments, currentUser],
+  )
+  const activeAppointment = issuedAppointment ?? patientAppointments[0] ?? null
+  const activeAppointmentDoctor = useMemo(
+    () =>
+      liveDoctors.find((doctor) => doctor.id === activeAppointment?.doctorId) ??
+      selectedLiveDoctor,
+    [activeAppointment?.doctorId, liveDoctors, selectedLiveDoctor],
+  )
+  const showFooter = screen !== 'auth' && screen !== 'language'
+  const activeFooterTab = getFooterTab(screen)
 
   useEffect(() => {
     const timer = window.setInterval(() => {
@@ -701,6 +808,37 @@ function FirstMobilePage() {
     return unsubscribe
   }, [])
 
+  function handleFooterNavigate(tab) {
+    if (tab === 'home') {
+      setScreen('departments')
+      return
+    }
+
+    if (tab === 'token') {
+      if (activeAppointment) {
+        setScreen('token')
+      }
+
+      return
+    }
+
+    if (tab === 'appts') {
+      setScreen(selectedLiveDoctor?.id ? 'booking' : 'departments')
+      return
+    }
+
+    setScreen('records')
+  }
+
+  function handleLogout() {
+    clearUserSession()
+    setCurrentUser(null)
+    setSelectedDepartment(null)
+    setSelectedDoctor(null)
+    setIssuedAppointment(null)
+    setScreen('auth')
+  }
+
   async function handleUserAuth({ mode, name, mobile }) {
     const normalizedMobile = normalizeMobileInput(mobile)
     const patientName = name.trim()
@@ -730,7 +868,7 @@ function FirstMobilePage() {
 
       setCurrentUser(loggedInUser)
       saveUserSession(loggedInUser)
-      setScreen('language')
+      setScreen('departments')
       return
     }
 
@@ -751,7 +889,7 @@ function FirstMobilePage() {
 
     setCurrentUser(registeredUser)
     saveUserSession(registeredUser)
-    setScreen('language')
+    setScreen('departments')
   }
 
   async function handleConfirmAppointment(appointment) {
@@ -824,7 +962,7 @@ function FirstMobilePage() {
       <section
         className={`carequeue-phone ${
           screen !== 'auth' && screen !== 'language' ? 'carequeue-phone-departments' : ''
-        }`}
+        } ${showFooter ? 'carequeue-phone-tabbed' : ''}`}
       >
         {screen === 'auth' ? (
           <UserMobileAuth
@@ -847,7 +985,7 @@ function FirstMobilePage() {
             departments={departments}
             error={departmentsError}
             isLoading={isDepartmentsLoading}
-            onBack={() => setScreen('language')}
+            onLogout={handleLogout}
             onSelectDepartment={(department) => {
               setSelectedDepartment(department)
               setScreen('doctors')
@@ -878,21 +1016,45 @@ function FirstMobilePage() {
         ) : screen === 'token' ? (
           <TokenIssuedPage
             appointments={appointments}
-            appointment={issuedAppointment}
-            doctor={selectedLiveDoctor}
+            appointment={activeAppointment}
+            doctor={activeAppointmentDoctor}
             onBack={() => setScreen('booking')}
             onOpenQueue={() => setScreen('queue')}
             text={text}
             time={time}
           />
-        ) : (
+        ) : screen === 'queue' ? (
           <LiveQueuePage
             appointments={appointments}
-            appointment={issuedAppointment}
-            doctor={selectedLiveDoctor}
+            appointment={activeAppointment}
+            doctor={activeAppointmentDoctor}
             onBack={() => setScreen('token')}
             text={text}
             time={time}
+          />
+        ) : (
+          <RecordsPage
+            appointments={patientAppointments}
+            allAppointments={appointments}
+            currentUser={currentUser}
+            doctors={liveDoctors}
+            onLogout={handleLogout}
+            onOpenAppointment={(appointment, doctor) => {
+              setIssuedAppointment(appointment)
+              setSelectedDoctor(doctor ?? null)
+              setScreen('token')
+            }}
+            text={text}
+            time={time}
+          />
+        )}
+
+        {showFooter && (
+          <FooterNav
+            activeTab={activeFooterTab}
+            hasAppointment={Boolean(activeAppointment)}
+            onNavigate={handleFooterNavigate}
+            text={text}
           />
         )}
       </section>
@@ -1072,14 +1234,19 @@ function LanguageSelection({
   )
 }
 
-function DepartmentSelection({ departments, error, isLoading, onBack, onSelectDepartment, text, time }) {
+function DepartmentSelection({ departments, error, isLoading, onLogout, onSelectDepartment, text, time }) {
   return (
     <div className="department-page">
       <header className="department-hero">
         <div className="department-hero-bar">
           <div className="department-status">{time}</div>
-          <button className="department-back-button" type="button" onClick={onBack} aria-label="Go back">
-            ←
+          <button
+            className="department-logout-button"
+            type="button"
+            onClick={onLogout}
+            aria-label={text.logout}
+          >
+            {text.logout}
           </button>
         </div>
         <h1>{text.clinic}</h1>
@@ -1552,6 +1719,127 @@ function LiveQueuePage({ appointment, appointments = [], doctor, onBack, text, t
         </button>
       </section>
     </div>
+  )
+}
+
+function RecordsPage({
+  allAppointments = [],
+  appointments = [],
+  currentUser,
+  doctors,
+  onLogout,
+  onOpenAppointment,
+  text,
+  time,
+}) {
+  const latestAppointment = appointments.find(isActiveAppointment) ?? appointments[0]
+  const latestDoctor = doctors.find((doctor) => doctor.id === latestAppointment?.doctorId)
+  const latestStatus = latestAppointment
+    ? getLiveQueueStatus({ appointment: latestAppointment, appointments: allAppointments, doctor: latestDoctor })
+    : null
+
+  return (
+    <div className="records-page">
+      <header className="records-hero">
+        <div className="department-hero-bar">
+          <div className="department-status">{time}</div>
+          <button className="records-logout-button" type="button" onClick={onLogout}>
+            {text.logout}
+          </button>
+        </div>
+        <h1>{text.records}</h1>
+        <p>{currentUser?.name || formatMobileNumber(currentUser?.mobile)}</p>
+      </header>
+
+      <section className="records-content">
+        <section className="records-panel" aria-label={text.notifications}>
+          <div className="records-section-title">
+            <h2>{text.notifications}</h2>
+          </div>
+
+          {latestStatus ? (
+            <button
+              className="records-notification"
+              type="button"
+              onClick={() => onOpenAppointment(latestAppointment, latestDoctor)}
+            >
+              <span>{text.latestUpdate}</span>
+              <strong>{latestStatus.token}</strong>
+              <em>
+                {latestStatus.aheadCount} {text.patientsAhead} · ~{latestStatus.waitMinutes}m {text.wait}
+              </em>
+            </button>
+          ) : (
+            <p className="records-empty">{text.noNotifications}</p>
+          )}
+        </section>
+
+        <section className="records-panel" aria-label={text.bookings}>
+          <div className="records-section-title">
+            <h2>{text.bookings}</h2>
+          </div>
+
+          {appointments.length === 0 ? (
+            <p className="records-empty">{text.noBookings}</p>
+          ) : (
+            <div className="records-bookings-list">
+              {appointments.map((appointment) => {
+                const doctor = doctors.find((currentDoctor) => currentDoctor.id === appointment.doctorId)
+                const status = String(appointment.status ?? 'waiting')
+
+                return (
+                  <button
+                    className="records-booking-card"
+                    key={appointment.id}
+                    type="button"
+                    onClick={() => onOpenAppointment(appointment, doctor)}
+                  >
+                    <span>
+                      <strong>{appointment.token}</strong>
+                      <em>{appointment.doctorName || doctor?.name || text.doctor}</em>
+                    </span>
+                    <span>
+                      <small>
+                        {text.bookedFor} {formatDateKeyTitle(appointment.dateKey)}
+                      </small>
+                      <small>{appointment.slot || appointment.department}</small>
+                    </span>
+                    <b>{status}</b>
+                  </button>
+                )
+              })}
+            </div>
+          )}
+        </section>
+      </section>
+    </div>
+  )
+}
+
+function FooterNav({ activeTab, hasAppointment, onNavigate, text }) {
+  const items = [
+    { id: 'home', label: text.home, disabled: false },
+    { id: 'token', label: 'Token', disabled: !hasAppointment },
+    { id: 'appts', label: text.appts, disabled: false },
+    { id: 'records', label: text.records, disabled: false },
+  ]
+
+  return (
+    <nav className="carequeue-footer" aria-label="CareQueue navigation">
+      {items.map((item) => (
+        <button
+          className="carequeue-footer-button"
+          data-active={activeTab === item.id}
+          disabled={item.disabled}
+          key={item.id}
+          type="button"
+          onClick={() => onNavigate(item.id)}
+        >
+          <span className="carequeue-footer-icon" aria-hidden="true"></span>
+          <span>{item.label}</span>
+        </button>
+      ))}
+    </nav>
   )
 }
 
