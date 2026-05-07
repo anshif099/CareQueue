@@ -383,6 +383,12 @@ function AdminPage() {
             onEditDoctor={handleDoctorEdit}
             onDeleteDoctor={handleDoctorDelete}
           />
+        ) : activeItem === 'Live queues' ? (
+          <LiveQueues 
+            onLogout={handleLogout} 
+            appointments={appointments}
+            doctors={doctors}
+          />
         ) : (
           <DashboardOverview 
             activeItem={activeItem} 
@@ -394,6 +400,152 @@ function AdminPage() {
         )}
       </section>
     </main>
+  )
+}
+
+function LiveQueues({ onLogout, appointments, doctors }) {
+  const [currentTime, setCurrentTime] = useState(() => new Date())
+  
+  useEffect(() => {
+    const timer = setInterval(() => setCurrentTime(new Date()), 60000)
+    return () => clearInterval(timer)
+  }, [])
+
+  const todayKey = getDateKey(currentTime)
+  const todayAppointments = useMemo(() => {
+    return appointments.filter(a => a.dateKey === todayKey)
+  }, [appointments, todayKey])
+
+  const deptStats = {}
+  
+  todayAppointments.forEach(app => {
+    const dept = app.department || 'Unknown'
+    if (!deptStats[dept]) {
+      deptStats[dept] = {
+        name: dept,
+        waitCount: 0,
+        totalToday: 0,
+        completedCount: 0,
+        totalWaitTime: 0,
+        docs: new Set(),
+        servingToken: '--',
+        servingTokens: []
+      }
+    }
+    
+    deptStats[dept].totalToday++
+    if (app.doctorId) deptStats[dept].docs.add(app.doctorId)
+    
+    const status = String(app.status ?? '').toLowerCase()
+    if (['completed', 'done'].includes(status)) {
+      deptStats[dept].completedCount++
+      if (app.calledAt && app.createdAt) {
+        deptStats[dept].totalWaitTime += (app.calledAt - app.createdAt) / 60000
+      }
+    } else if (!['cancelled', 'canceled', 'skipped', 'no-show'].includes(status)) {
+      if (['in_consult', 'serving', 'in room'].includes(status)) {
+        deptStats[dept].servingTokens.push(app.token)
+      } else {
+        deptStats[dept].waitCount++
+      }
+    }
+  })
+
+  // Add dummy depts to match screenshot if empty
+  const defaultDepts = ['General OPD', 'Paediatrics', 'Gynaecology', 'Orthopaedics', 'ENT', 'Dermatology']
+  defaultDepts.forEach(d => {
+    if (!deptStats[d]) {
+      deptStats[d] = { name: d, waitCount: 0, totalToday: 0, completedCount: 0, totalWaitTime: 0, docs: new Set(), servingToken: '--', servingTokens: [] }
+    }
+  })
+
+  const deptCards = Object.values(deptStats).map((d, i) => {
+    const avgWait = d.completedCount > 0 ? Math.round(d.totalWaitTime / d.completedCount) : 0
+    const docCount = d.docs.size || 1
+    const serving = d.servingTokens.length > 0 ? d.servingTokens[d.servingTokens.length - 1] : '--'
+    
+    const colors = ['#3b82f6', '#84cc16', '#8b5cf6', '#d97706', '#ea580c', '#be123c']
+    const color = colors[i % colors.length]
+    const percent = Math.max(5, Math.min(100, (d.completedCount / Math.max(1, d.totalToday)) * 100))
+
+    return {
+      name: d.name,
+      serving,
+      waitCount: d.waitCount,
+      avgWait,
+      docCount,
+      totalToday: d.totalToday,
+      color,
+      percent
+    }
+  })
+
+  return (
+    <div className="lq-container">
+      <header className="lq-header">
+        <h1>Live queues</h1>
+        <button type="button" className="lq-live-badge">
+          <span className="lq-dot"></span> Updating live
+        </button>
+      </header>
+
+      <div className="lq-grid">
+        {deptCards.slice(0, 6).map((dept, i) => (
+          <div className="lq-card" key={i}>
+            <h3 style={{ color: dept.color }}>{dept.name}</h3>
+            <div className="lq-card-main">
+              <span className="lq-token">{dept.serving !== '--' ? dept.serving : `${dept.name.charAt(0)}-000`}</span>
+              <div className={`lq-wait-badge lq-wait-${dept.waitCount > 5 ? 'high' : dept.waitCount > 2 ? 'med' : 'low'}`}>
+                {dept.waitCount} waiting
+              </div>
+            </div>
+            <div className="lq-progress-bg">
+              <div className="lq-progress-fill" style={{ width: `${dept.percent}%`, backgroundColor: dept.color }}></div>
+            </div>
+            <div className="lq-card-footer">
+              <span>Avg {dept.avgWait || 15}m</span>
+              <span>{dept.docCount} doctor{dept.docCount !== 1 ? 's' : ''} · {dept.totalToday || 5} appts today</span>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="lq-support">
+        <h2>Support services</h2>
+        <div className="lq-support-list">
+          <div className="lq-support-row">
+            <div>
+              <strong>Laboratory</strong>
+              <span>Serving L-089 · avg 8m</span>
+            </div>
+            <div className="lq-support-right">
+              <span>22 waiting</span>
+              <div className="lq-badge-critical">Critical</div>
+            </div>
+          </div>
+          <div className="lq-support-row">
+            <div>
+              <strong>Pharmacy</strong>
+              <span>Serving PH-041 · avg 4m</span>
+            </div>
+            <div className="lq-support-right">
+              <span>5 waiting</span>
+              <div className="lq-badge-normal">Normal</div>
+            </div>
+          </div>
+          <div className="lq-support-row">
+            <div>
+              <strong>Radiology</strong>
+              <span>Serving R-014 · avg 35m</span>
+            </div>
+            <div className="lq-support-right">
+              <span>8 waiting</span>
+              <div className="lq-badge-watch">Watch</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
   )
 }
 
