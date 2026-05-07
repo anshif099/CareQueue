@@ -18,6 +18,7 @@ const queueRows = [
 
 const emptyDoctorForm = {
   id: '',
+  loginId: '',
   name: '',
   department: '',
   mobile: '',
@@ -182,6 +183,7 @@ function AdminPage() {
   function handleDoctorEdit(doctor) {
     setDoctorForm({
       id: doctor.id,
+      loginId: doctor.loginId || '',
       name: doctor.name || '',
       department: doctor.department || '',
       mobile: doctor.mobile || '',
@@ -204,12 +206,28 @@ function AdminPage() {
 
     try {
       const appointmentsPerDay = Number(doctorForm.appointmentsPerDay)
+      const loginId = doctorForm.loginId.trim()
 
       if (!Number.isFinite(appointmentsPerDay) || appointmentsPerDay <= 0) {
         throw new Error('Enter a valid number of appointments per day')
       }
 
+      if (!loginId) {
+        throw new Error('Enter a doctor login ID')
+      }
+
+      const duplicateLogin = doctors.find(
+        (doctor) =>
+          doctor.id !== doctorForm.id &&
+          String(doctor.loginId ?? '').trim().toLowerCase() === loginId.toLowerCase(),
+      )
+
+      if (duplicateLogin) {
+        throw new Error('This doctor login ID is already used')
+      }
+
       const doctorData = {
+        loginId,
         name: doctorForm.name.trim(),
         department: doctorForm.department.trim(),
         mobile: doctorForm.mobile.trim(),
@@ -434,6 +452,16 @@ function DoctorManagement({
 
           <div className="doctor-form-grid">
             <label>
+              Doctor login ID
+              <input
+                required
+                value={doctorForm.loginId}
+                onChange={(event) => onUpdateField('loginId', event.target.value)}
+                placeholder="rajan-opd"
+              />
+            </label>
+
+            <label>
               Doctor name
               <input
                 required
@@ -600,6 +628,7 @@ function DoctorCard({ doctor, onEdit, onDelete }) {
             {doctor.counter ? ` | ${doctor.counter}` : ''}
           </p>
           <span>{doctor.mobile}</span>
+          {doctor.loginId && <span>Login ID: {doctor.loginId}</span>}
         </div>
       </div>
 

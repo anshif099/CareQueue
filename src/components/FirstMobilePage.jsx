@@ -528,7 +528,7 @@ async function copyTextToClipboard(text) {
 
 function isActiveAppointment(appointment) {
   const status = String(appointment?.status ?? 'waiting').toLowerCase()
-  return !['completed', 'done', 'cancelled', 'canceled'].includes(status)
+  return !['completed', 'done', 'cancelled', 'canceled', 'skipped', 'no-show'].includes(status)
 }
 
 function compareAppointments(firstAppointment, secondAppointment) {
