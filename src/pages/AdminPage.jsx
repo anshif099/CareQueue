@@ -88,6 +88,20 @@ function getAverageSlot(startTime, endTime, appointmentsPerDay) {
   return `${slotMinutes}m`
 }
 
+function getDateKey(date) {
+  return [
+    date.getFullYear(),
+    String(date.getMonth() + 1).padStart(2, '0'),
+    String(date.getDate()).padStart(2, '0'),
+  ].join('-')
+}
+
+function mapAppointments(snapshot) {
+  const appointments = snapshot.val()
+  if (!appointments) return []
+  return Object.entries(appointments).map(([id, appointment]) => ({ id, ...appointment }))
+}
+
 function mapDoctors(snapshot) {
   const doctors = snapshot.val()
 
@@ -112,6 +126,7 @@ function AdminPage() {
   const [doctorForm, setDoctorForm] = useState(emptyDoctorForm)
   const [isSavingDoctor, setIsSavingDoctor] = useState(false)
   const [doctorFormError, setDoctorFormError] = useState('')
+  const [appointments, setAppointments] = useState([])
 
   const today = useMemo(
     () =>
@@ -141,7 +156,17 @@ function AdminPage() {
       },
     )
 
-    return unsubscribe
+    const unsubscribeAppointments = onValue(
+      databaseRef(database, 'appointments'),
+      (snapshot) => {
+        setAppointments(mapAppointments(snapshot))
+      }
+    )
+
+    return () => {
+      unsubscribe()
+      unsubscribeAppointments()
+    }
   }, [isAuthed])
 
   function handleLogin(event) {
@@ -339,6 +364,7 @@ function AdminPage() {
             doctorForm={doctorForm}
             doctorFormError={doctorFormError}
             doctors={doctors}
+            appointments={appointments}
             doctorsError={doctorsError}
             isDoctorFormOpen={isDoctorFormOpen}
             isDoctorsLoading={isDoctorsLoading}
@@ -421,6 +447,7 @@ function DoctorManagement({
   doctorForm,
   doctorFormError,
   doctors,
+  appointments,
   doctorsError,
   isDoctorFormOpen,
   isDoctorsLoading,
@@ -432,6 +459,7 @@ function DoctorManagement({
   onEditDoctor,
   onDeleteDoctor,
 }) {
+  const todayKey = getDateKey(new Date())
   return (
     <section className="doctor-management">
       <header className="doctor-management-header">
@@ -558,14 +586,25 @@ function DoctorManagement({
         </div>
       ) : (
         <div className="doctor-list">
-          {doctors.map((doctor) => (
-            <DoctorCard 
-              doctor={doctor} 
-              key={doctor.id} 
-              onEdit={() => onEditDoctor(doctor)}
-              onDelete={() => onDeleteDoctor(doctor.id)}
-            />
-          ))}
+          {doctors.map((doctor) => {
+            const doctorAppointments = appointments.filter(a => a.doctorId === doctor.id && a.dateKey === todayKey)
+            const seenCount = doctorAppointments.filter(a => String(a.status ?? '').toLowerCase() === 'completed').length
+            const waitingCount = doctorAppointments.filter(a => {
+              const status = String(a.status ?? 'waiting').toLowerCase()
+              return !['completed', 'done', 'cancelled', 'canceled', 'skipped', 'no-show'].includes(status)
+            }).length
+
+            return (
+              <DoctorCard 
+                doctor={doctor} 
+                seenCount={seenCount}
+                waitingCount={waitingCount}
+                key={doctor.id} 
+                onEdit={() => onEditDoctor(doctor)}
+                onDelete={() => onDeleteDoctor(doctor.id)}
+              />
+            )
+          })}
         </div>
       )}
     </section>
@@ -614,7 +653,7 @@ function TimeSelectGroup({ hour, minute, onUpdateField, period, prefix }) {
   )
 }
 
-function DoctorCard({ doctor, onEdit, onDelete }) {
+function DoctorCard({ doctor, seenCount, waitingCount, onEdit, onDelete }) {
   const appointmentsPerDay = Number(doctor.appointmentsPerDay) || 0
 
   return (
@@ -641,11 +680,11 @@ function DoctorCard({ doctor, onEdit, onDelete }) {
 
       <div className="doctor-metrics">
         <div>
-          <strong>0</strong>
+          <strong>{seenCount ?? 0}</strong>
           <span>Seen</span>
         </div>
         <div>
-          <strong className="doctor-waiting-count">0</strong>
+          <strong className="doctor-waiting-count">{waitingCount ?? 0}</strong>
           <span>Waiting</span>
         </div>
         <div>
