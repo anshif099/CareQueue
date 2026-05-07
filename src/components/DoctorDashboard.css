@@ -4,6 +4,7 @@
   min-height: 100dvh;
   background: #252622;
   color: #f4f4ef;
+  overflow-y: auto;
 }
 
 .doctor-login-page {
@@ -44,7 +45,7 @@
 
 .doctor-login-card h1 {
   color: #fff;
-  font-size: 30px;
+  font-size: 24px;
   line-height: 1.08;
 }
 
@@ -100,8 +101,8 @@
 .doctor-console {
   display: grid;
   align-content: start;
-  gap: 22px;
-  padding: 27px;
+  gap: 16px;
+  padding: 20px;
 }
 
 .doctor-console-loading {
@@ -120,28 +121,28 @@
 .doctor-queue-panel,
 .doctor-today-panel {
   border: 1px solid #555650;
-  border-radius: 16px;
+  border-radius: 12px;
   background: #2d2e2a;
 }
 
 .doctor-profile-card {
-  min-height: 110px;
+  min-height: 80px;
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
-  gap: 18px;
-  padding: 20px 27px;
+  gap: 14px;
+  padding: 14px 20px;
 }
 
 .doctor-page-avatar {
-  width: 68px;
-  height: 68px;
+  width: 48px;
+  height: 48px;
   border-radius: 999px;
   background: #e2f0ff;
   color: #15558f;
   display: grid;
   flex: 0 0 auto;
-  font-size: 24px;
+  font-size: 18px;
   font-weight: 900;
   place-items: center;
 }
@@ -157,17 +158,17 @@
 
 .doctor-profile-copy h1 {
   color: #f6f6f1;
-  font-size: 25px;
+  font-size: 18px;
   font-weight: 900;
   line-height: 1.08;
 }
 
 .doctor-profile-copy p {
   color: #c9c9c2;
-  font-size: 18px;
+  font-size: 13px;
   font-weight: 650;
   line-height: 1.25;
-  margin-top: 5px;
+  margin-top: 4px;
   overflow-wrap: anywhere;
 }
 
@@ -176,25 +177,25 @@
   align-items: center;
   justify-content: flex-end;
   flex-wrap: wrap;
-  gap: 14px;
+  gap: 12px;
 }
 
 .doctor-profile-actions span {
   border-radius: 9px;
   background: #dcecff;
   color: #0d477e;
-  font-size: 15px;
+  font-size: 13px;
   font-weight: 900;
   line-height: 1;
-  padding: 8px 15px;
+  padding: 6px 12px;
 }
 
 .doctor-profile-actions em {
   color: #60a314;
   display: inline-flex;
   align-items: center;
-  gap: 12px;
-  font-size: 18px;
+  gap: 8px;
+  font-size: 13px;
   font-style: normal;
   font-weight: 850;
   line-height: 1;
@@ -202,8 +203,8 @@
 
 .doctor-profile-actions em::before {
   content: '';
-  width: 15px;
-  height: 15px;
+  width: 10px;
+  height: 10px;
   border-radius: 999px;
   background: #72bd19;
 }
@@ -217,34 +218,35 @@
 }
 
 .doctor-profile-actions button {
-  min-height: 34px;
+  min-height: 28px;
   border: 1px solid #666862;
-  border-radius: 9px;
+  border-radius: 6px;
   background: transparent;
   color: #f4f4ef;
   cursor: pointer;
+  font-size: 12px;
   font-weight: 850;
-  padding: 0 14px;
+  padding: 0 12px;
 }
 
 .doctor-stat-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 16px;
+  gap: 12px;
 }
 
 .doctor-stat-grid article {
-  min-height: 118px;
+  min-height: 80px;
   display: grid;
   align-content: center;
-  gap: 5px;
-  padding: 22px 24px;
+  gap: 4px;
+  padding: 16px 20px;
 }
 
 .doctor-stat-grid span,
 .doctor-stat-grid p {
   color: #c5c5bd;
-  font-size: 19px;
+  font-size: 13px;
   font-weight: 650;
   line-height: 1.1;
   margin: 0;
@@ -252,16 +254,16 @@
 
 .doctor-stat-grid strong {
   color: #fff;
-  font-size: 40px;
+  font-size: 24px;
   line-height: 1;
 }
 
 .doctor-current-card {
   border-color: #0b72d9;
   display: grid;
-  gap: 18px;
-  min-height: 286px;
-  padding: 27px;
+  gap: 14px;
+  min-height: 180px;
+  padding: 20px;
 }
 
 .doctor-current-card[data-empty='true'] {
@@ -274,7 +276,7 @@
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
-  gap: 17px;
+  gap: 14px;
 }
 
 .doctor-current-header h2,
@@ -286,7 +288,7 @@
 
 .doctor-current-header h2 {
   color: #fff;
-  font-size: 30px;
+  font-size: 20px;
   font-weight: 900;
   line-height: 1.05;
 }
@@ -294,16 +296,16 @@
 .doctor-current-header p,
 .doctor-current-header span {
   color: #c6c6bf;
-  font-size: 18px;
+  font-size: 13px;
   font-weight: 650;
   line-height: 1.2;
-  margin-top: 7px;
+  margin-top: 4px;
 }
 
 .doctor-current-header strong {
   color: #fff;
   display: block;
-  font-size: 22px;
+  font-size: 15px;
   font-weight: 900;
   text-align: right;
 }
@@ -311,59 +313,59 @@
 .doctor-vital-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 11px;
+  gap: 8px;
 }
 
 .doctor-vital-grid div {
-  min-height: 84px;
-  border-radius: 10px;
+  min-height: 60px;
+  border-radius: 8px;
   background: #242522;
   display: grid;
   place-items: center;
   align-content: center;
-  gap: 6px;
-  padding: 10px;
+  gap: 4px;
+  padding: 8px;
   text-align: center;
 }
 
 .doctor-vital-grid strong {
   color: #fff;
-  font-size: 26px;
+  font-size: 18px;
   line-height: 1;
 }
 
 .doctor-vital-grid span {
   color: #c5c5bd;
-  font-size: 16px;
+  font-size: 12px;
   font-weight: 650;
   line-height: 1;
 }
 
 .doctor-history {
   display: grid;
-  gap: 10px;
+  gap: 8px;
 }
 
 .doctor-history span {
   color: #c5c5bd;
-  font-size: 18px;
+  font-size: 13px;
   font-weight: 750;
 }
 
 .doctor-history div {
   display: flex;
   flex-wrap: wrap;
-  gap: 14px;
+  gap: 10px;
 }
 
 .doctor-history em {
-  border-radius: 9px;
+  border-radius: 6px;
   background: #dcecff;
   color: #15558f;
-  font-size: 16px;
+  font-size: 12px;
   font-style: normal;
   font-weight: 650;
-  padding: 7px 16px;
+  padding: 4px 12px;
 }
 
 .doctor-current-card::after {
@@ -381,19 +383,19 @@
 
 .doctor-current-empty h2 {
   color: #fff;
-  font-size: 24px;
+  font-size: 18px;
 }
 
 .doctor-current-empty p {
   color: #c5c5bd;
-  font-size: 17px;
-  margin-top: 7px;
+  font-size: 13px;
+  margin-top: 5px;
 }
 
 .doctor-console-grid {
   display: grid;
-  grid-template-columns: minmax(360px, 0.9fr) minmax(430px, 1.2fr);
-  gap: 20px;
+  grid-template-columns: minmax(320px, 0.9fr) minmax(380px, 1.2fr);
+  gap: 16px;
   align-items: start;
 }
 
@@ -401,8 +403,8 @@
 .doctor-prescription-panel,
 .doctor-today-panel {
   display: grid;
-  gap: 13px;
-  padding: 24px;
+  gap: 10px;
+  padding: 16px;
 }
 
 .doctor-actions-panel {
@@ -411,16 +413,16 @@
 
 .doctor-actions-panel > button,
 .doctor-prescription-actions button {
-  min-height: 64px;
+  min-height: 44px;
   border: 1px solid #62635e;
-  border-radius: 12px;
+  border-radius: 8px;
   background: transparent;
   color: #f4f4ef;
   cursor: pointer;
-  font-size: 22px;
+  font-size: 15px;
   font-weight: 850;
   line-height: 1.15;
-  padding: 10px 16px;
+  padding: 8px 12px;
 }
 
 .doctor-actions-panel > button:first-child,
@@ -435,15 +437,15 @@
 }
 
 .doctor-break-button {
-  margin-top: 6px;
+  margin-top: 4px;
 }
 
 .doctor-queue-panel {
   grid-column: 1 / -1;
   display: grid;
   gap: 0;
-  margin-top: 6px;
-  padding: 22px 24px;
+  margin-top: 4px;
+  padding: 16px;
 }
 
 .doctor-queue-panel h2,
@@ -459,25 +461,25 @@
 .doctor-prescription-panel h2,
 .doctor-today-panel h2 {
   color: #fff;
-  font-size: 20px;
+  font-size: 16px;
   font-weight: 900;
   line-height: 1.1;
-  margin-bottom: 16px;
+  margin-bottom: 12px;
 }
 
 .doctor-queue-panel p,
 .doctor-today-panel p {
   color: #c5c5bd;
-  font-size: 17px;
+  font-size: 13px;
 }
 
 .doctor-queue-row {
-  min-height: 57px;
+  min-height: 44px;
   border-bottom: 1px solid #4a4b45;
   display: grid;
-  grid-template-columns: 86px minmax(0, 1fr) auto;
+  grid-template-columns: 60px minmax(0, 1fr) auto;
   align-items: center;
-  gap: 14px;
+  gap: 10px;
 }
 
 .doctor-queue-row:last-child {
@@ -486,13 +488,13 @@
 
 .doctor-queue-row strong {
   color: #fff;
-  font-size: 20px;
+  font-size: 14px;
   line-height: 1;
 }
 
 .doctor-queue-row span {
   color: #c5c5bd;
-  font-size: 19px;
+  font-size: 14px;
   font-weight: 650;
   overflow-wrap: anywhere;
 }
@@ -501,10 +503,10 @@
   border-radius: 999px;
   background: #fff3dc;
   color: #6d4318;
-  font-size: 16px;
+  font-size: 12px;
   font-style: normal;
   font-weight: 900;
-  padding: 7px 15px;
+  padding: 4px 10px;
 }
 
 .doctor-queue-row em[data-state='next'] {
@@ -518,15 +520,15 @@
 
 .doctor-prescription-panel textarea {
   width: 100%;
-  min-height: 120px;
+  min-height: 80px;
   border: 1px solid #565752;
-  border-radius: 10px;
+  border-radius: 8px;
   background: #30312d;
   color: #f7f7f2;
   font: inherit;
-  font-size: 25px;
+  font-size: 15px;
   line-height: 1.2;
-  padding: 17px 24px;
+  padding: 12px 16px;
   resize: vertical;
   outline: none;
 }
@@ -537,32 +539,32 @@
 
 .doctor-prescription-panel span {
   color: #c5c5bd;
-  font-size: 17px;
+  font-size: 13px;
   font-weight: 750;
 }
 
 .doctor-quick-add {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 6px;
 }
 
 .doctor-quick-add button {
-  min-height: 35px;
+  min-height: 28px;
   border: 1px solid #555650;
-  border-radius: 9px;
+  border-radius: 6px;
   background: #242522;
   color: #f4f4ef;
   cursor: pointer;
-  font-size: 14px;
+  font-size: 12px;
   font-weight: 800;
-  padding: 0 13px;
+  padding: 0 10px;
 }
 
 .doctor-prescription-actions {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
+  gap: 10px;
 }
 
 .doctor-today-panel {
@@ -575,12 +577,12 @@
 }
 
 .doctor-today-row {
-  min-height: 53px;
+  min-height: 40px;
   border-bottom: 1px solid #4a4b45;
   display: grid;
-  grid-template-columns: 78px minmax(0, 1fr) 82px 120px;
+  grid-template-columns: 60px minmax(0, 1fr) 64px 90px;
   align-items: center;
-  gap: 14px;
+  gap: 10px;
 }
 
 .doctor-today-row:last-child {
@@ -589,12 +591,12 @@
 
 .doctor-today-row strong {
   color: #fff;
-  font-size: 18px;
+  font-size: 14px;
 }
 
 .doctor-today-row span {
   color: #c5c5bd;
-  font-size: 17px;
+  font-size: 13px;
   font-weight: 650;
   overflow-wrap: anywhere;
 }
@@ -603,11 +605,12 @@
   color: #fff;
   font-style: normal;
   font-weight: 850;
+  font-size: 12px;
 }
 
 @media (max-width: 980px) {
   .doctor-console {
-    padding: 18px;
+    padding: 16px;
   }
 
   .doctor-profile-card,
@@ -640,7 +643,7 @@
   .doctor-actions-panel,
   .doctor-prescription-panel,
   .doctor-today-panel {
-    padding: 16px;
+    padding: 14px;
   }
 
   .doctor-actions-panel {
@@ -651,15 +654,15 @@
   .doctor-today-row {
     grid-template-columns: 1fr;
     gap: 6px;
-    padding: 10px 0;
+    padding: 8px 0;
   }
 
   .doctor-actions-panel > button,
   .doctor-prescription-actions button {
-    font-size: 18px;
+    font-size: 15px;
   }
 
   .doctor-prescription-panel textarea {
-    font-size: 18px;
+    font-size: 15px;
   }
 }
