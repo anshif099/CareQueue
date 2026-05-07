@@ -16,6 +16,7 @@ function LabPage() {
   
   const [medicinesGiven, setMedicinesGiven] = useState(false)
   const [itemAmounts, setItemAmounts] = useState({})
+  const [customItems, setCustomItems] = useState([])
 
   useEffect(() => {
     const appointmentsRef = databaseRef(database, 'appointments')
@@ -54,6 +55,7 @@ function LabPage() {
     setActivePatientId(id)
     setMedicinesGiven(false)
     setItemAmounts({})
+    setCustomItems([])
   }
 
   const prescriptionLines = useMemo(() => {
@@ -61,8 +63,10 @@ function LabPage() {
   }, [activePatient])
 
   const totalBill = useMemo(() => {
-    return Object.values(itemAmounts).reduce((sum, val) => sum + (Number(val) || 0), 0)
-  }, [itemAmounts])
+    const prescTotal = Object.values(itemAmounts).reduce((sum, val) => sum + (Number(val) || 0), 0)
+    const customTotal = customItems.reduce((sum, item) => sum + (Number(item.amount) || 0), 0)
+    return prescTotal + customTotal
+  }, [itemAmounts, customItems])
 
   const handleAmountChange = (index, value) => {
     setItemAmounts(prev => ({
@@ -85,6 +89,7 @@ function LabPage() {
     setActivePatientId(null)
     setMedicinesGiven(false)
     setItemAmounts({})
+    setCustomItems([])
   }
 
   return (
@@ -137,7 +142,9 @@ function LabPage() {
               <h3>Prescription Details & Billing</h3>
               <div className="lab-prescription-list">
                 {prescriptionLines.length > 0 ? prescriptionLines.map((line, i) => {
-                  const isMedicine = line.trim().startsWith('•') || line.trim().startsWith('-') || line.trim().startsWith('*') || /^\d+\./.test(line.trim())
+                  const lower = line.toLowerCase()
+                  const isInstruction = lower.includes('advised') || lower.includes('avoid') || lower.includes('drink') || lower.includes('rest') || lower.includes('review') || lower.includes('steam') || lower.includes('diet') || lower.includes('consult')
+                  const isMedicine = (line.trim().startsWith('•') || line.trim().startsWith('-') || line.trim().startsWith('*') || /^\d+\./.test(line.trim())) && !isInstruction
                   return (
                   <div className="lab-presc-item" key={i}>
                     <span className="lab-presc-text" style={{ color: isMedicine ? '#fff' : '#a3a3a3' }}>{line}</span>
@@ -162,7 +169,7 @@ function LabPage() {
             <div className="lab-section lab-actions-section">
               <h3>Pharmacy & Billing</h3>
               
-              <label className="lab-checkbox-label">
+              <label className="lab-checkbox-label" style={{ marginBottom: '16px' }}>
                 <input 
                   type="checkbox" 
                   checked={medicinesGiven}
@@ -170,6 +177,49 @@ function LabPage() {
                 />
                 Mark Medicines as Given / Available
               </label>
+
+              <div className="lab-custom-items" style={{ marginBottom: '24px' }}>
+                <h4 style={{ color: '#e2e8f0', marginBottom: '12px', fontSize: '15px' }}>Additional Billing Items</h4>
+                {customItems.map((item, index) => (
+                  <div className="lab-presc-item" key={item.id} style={{ marginBottom: '8px' }}>
+                    <input 
+                      type="text"
+                      className="lab-custom-name"
+                      placeholder="Item name (e.g., Syringe, Test)"
+                      value={item.name}
+                      onChange={(e) => {
+                        const newItems = [...customItems]
+                        newItems[index].name = e.target.value
+                        setCustomItems(newItems)
+                      }}
+                      style={{ background: 'transparent', border: 'none', color: '#fff', fontSize: '15px', outline: 'none', flex: 1, paddingRight: '16px' }}
+                    />
+                    <div className="lab-presc-amount">
+                      <span>₹</span>
+                      <input 
+                        type="number" 
+                        placeholder="0"
+                        value={item.amount}
+                        onChange={(e) => {
+                          const newItems = [...customItems]
+                          newItems[index].amount = e.target.value
+                          setCustomItems(newItems)
+                        }}
+                      />
+                    </div>
+                    <button 
+                      onClick={() => setCustomItems(customItems.filter(c => c.id !== item.id))}
+                      style={{ background: 'transparent', border: 'none', color: '#ef4444', fontSize: '20px', cursor: 'pointer', marginLeft: '8px' }}
+                    >×</button>
+                  </div>
+                ))}
+                <button 
+                  onClick={() => setCustomItems([...customItems, { id: Date.now(), name: '', amount: '' }])}
+                  style={{ background: 'transparent', border: '1px dashed #404040', color: '#a3a3a3', padding: '8px 16px', borderRadius: '8px', cursor: 'pointer', width: '100%', fontSize: '14px', marginTop: '8px' }}
+                >
+                  + Add Custom Item
+                </button>
+              </div>
 
               <div className="lab-bill-total">
                 <span>Total Bill Amount:</span>
