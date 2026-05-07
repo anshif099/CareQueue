@@ -384,62 +384,277 @@ function AdminPage() {
             onDeleteDoctor={handleDoctorDelete}
           />
         ) : (
-          <DashboardOverview activeItem={activeItem} onLogout={handleLogout} today={today} />
+          <DashboardOverview 
+            activeItem={activeItem} 
+            onLogout={handleLogout} 
+            today={today} 
+            appointments={appointments}
+            doctors={doctors}
+          />
         )}
       </section>
     </main>
   )
 }
 
-function DashboardOverview({ activeItem, onLogout, today }) {
+function DashboardOverview({ activeItem, onLogout, today, appointments, doctors }) {
+  const [currentTime, setCurrentTime] = useState(() => new Date())
+  
+  useEffect(() => {
+    const timer = setInterval(() => setCurrentTime(new Date()), 60000)
+    return () => clearInterval(timer)
+  }, [])
+
+  const timeString = new Intl.DateTimeFormat(undefined, {
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+  }).format(currentTime)
+
+  const todayKey = getDateKey(currentTime)
+  const todayAppointments = useMemo(() => {
+    return appointments.filter(a => a.dateKey === todayKey)
+  }, [appointments, todayKey])
+
+  const totalToday = todayAppointments.length
+  
+  let totalWait = 0
+  let waitCount = 0
+  let completedCount = 0
+  let noShowCount = 0
+
+  todayAppointments.forEach(app => {
+    const status = String(app.status ?? '').toLowerCase()
+    if (status === 'completed' || status === 'done') {
+      completedCount++
+      if (app.calledAt && app.createdAt) {
+        totalWait += (app.calledAt - app.createdAt) / 60000
+        waitCount++
+      }
+    } else if (status === 'skipped' || status === 'no-show') {
+      noShowCount++
+    } else if (status === 'in_consult' || status === 'serving') {
+      if (app.calledAt && app.createdAt) {
+        totalWait += (app.calledAt - app.createdAt) / 60000
+        waitCount++
+      }
+    }
+  })
+
+  const avgWaitTime = waitCount > 0 ? Math.round(totalWait / waitCount) : 0
+  const percentageDone = totalToday > 0 ? Math.round((completedCount / totalToday) * 100) : 0
+  const noShowRate = totalToday > 0 ? ((noShowCount / totalToday) * 100).toFixed(1) : 0
+
+  const deptStats = {}
+  todayAppointments.forEach(app => {
+    const dept = app.department || 'Unknown'
+    if (!deptStats[dept]) deptStats[dept] = 0
+    deptStats[dept]++
+  })
+  
+  const deptList = Object.entries(deptStats)
+    .map(([name, count]) => ({ name, count }))
+    .sort((a, b) => b.count - a.count)
+  
+  const maxDeptCount = deptList[0]?.count || 1
+
+  const hourlyBuckets = Array(8).fill(0)
+  const currentHour = currentTime.getHours()
+  const startHour = Math.max(8, currentHour - 7)
+  
+  todayAppointments.forEach(app => {
+    if (app.createdAt) {
+      const h = new Date(app.createdAt).getHours()
+      const index = h - startHour
+      if (index >= 0 && index < 8) {
+        hourlyBuckets[index]++
+      }
+    }
+  })
+  const maxHourCount = Math.max(...hourlyBuckets, 1)
+
+  const doctorWorkload = doctors.map(doc => {
+    const docApps = todayAppointments.filter(a => a.doctorId === doc.id)
+    const seen = docApps.filter(a => ['completed', 'done'].includes(String(a.status ?? '').toLowerCase())).length
+    const wait = docApps.filter(a => {
+      const status = String(a.status ?? 'waiting').toLowerCase()
+      return !['completed', 'done', 'cancelled', 'canceled', 'skipped', 'no-show'].includes(status)
+    }).length
+    
+    let badge = 'Open'
+    let badgeClass = 'open'
+    const status = String(doc.status ?? 'Consulting').toLowerCase()
+    if (status === 'on break' || status === 'break') {
+      badge = 'Break'
+      badgeClass = 'break'
+    } else if (wait > 10) {
+      badge = 'Busy'
+      badgeClass = 'busy'
+    }
+
+    return {
+      id: doc.id,
+      name: doc.name,
+      initials: getInitials(doc.name),
+      department: doc.department,
+      seen,
+      wait,
+      badge,
+      badgeClass
+    }
+  }).sort((a, b) => b.wait - a.wait)
+
+  const alerts = []
+  if (doctorWorkload.some(d => d.wait > 10)) {
+    const overloadedDoc = doctorWorkload.find(d => d.wait > 10)
+    alerts.push({
+      type: 'warning',
+      title: `${overloadedDoc.department} overloaded`,
+      desc: `${overloadedDoc.name} has ${overloadedDoc.wait} patients waiting — consider opening a new counter.`
+    })
+  }
+  if (noShowRate > 10) {
+    alerts.push({
+      type: 'danger',
+      title: 'High no-show rate',
+      desc: `Currently experiencing a ${noShowRate}% no-show rate. Patients may be facing delays.`
+    })
+  }
+  if (alerts.length === 0) {
+    alerts.push({
+      type: 'info',
+      title: 'All systems nominal',
+      desc: 'Queue loads are balanced across all active departments.'
+    })
+  }
+
   return (
-    <>
-      <header className="admin-topbar">
-        <div>
-          <p>{today}</p>
-          <h1>{activeItem}</h1>
+    <div className="admin-overview">
+      <header className="ao-header">
+        <h1>{activeItem}</h1>
+        <div className="ao-header-right">
+          <span>{today} · {timeString}</span>
+          <div className="ao-live-badge"><span className="ao-dot"></span> Live</div>
         </div>
-        <button type="button" onClick={onLogout}>
-          Logout
-        </button>
       </header>
 
-      <section className="admin-stat-grid" aria-label="Dashboard summary">
-        <article>
+      <div className="ao-stats-row">
+        <div className="ao-stat-card">
           <span>Patients today</span>
-          <strong>128</strong>
-          <p>24 waiting now</p>
-        </article>
-        <article>
-          <span>Active doctors</span>
-          <strong>8</strong>
-          <p>3 departments live</p>
-        </article>
-        <article>
-          <span>Avg wait</span>
-          <strong>18m</strong>
-          <p>Down 6m from yesterday</p>
-        </article>
-      </section>
+          <strong>{totalToday}</strong>
+          <p className="ao-trend-up">Live tracking active</p>
+        </div>
+        <div className="ao-stat-card">
+          <span>Avg wait time</span>
+          <strong>{avgWaitTime}m</strong>
+          <p className="ao-trend-up">Based on completed visits</p>
+        </div>
+        <div className="ao-stat-card">
+          <span>Consultations done</span>
+          <strong>{completedCount}</strong>
+          <p className="ao-trend-up">{percentageDone}% of day done</p>
+        </div>
+        <div className="ao-stat-card">
+          <span>No-shows</span>
+          <strong>{noShowCount}</strong>
+          <p className="ao-trend-down">{noShowRate}% no-show rate</p>
+        </div>
+      </div>
 
-      <section className="admin-panel">
-        <div className="admin-panel-header">
-          <h2>Live queues</h2>
-          <span>Auto refresh ready</span>
+      <div className="ao-grid-layout">
+        <div className="ao-panel">
+          <h2>Patients by department</h2>
+          <div className="ao-dept-list">
+            {deptList.length === 0 ? (
+              <p className="ao-empty">No patient data today</p>
+            ) : deptList.map((dept, idx) => (
+              <div className="ao-dept-row" key={dept.name}>
+                <span>{dept.name}</span>
+                <div className="ao-bar-bg">
+                  <div 
+                    className="ao-bar-fill" 
+                    style={{ 
+                      width: `${Math.max(5, (dept.count / maxDeptCount) * 100)}%`,
+                      backgroundColor: idx === 0 ? '#2563eb' : idx === 1 ? '#60a5fa' : idx === 2 ? '#93c5fd' : idx === 3 ? '#bfdbfe' : idx === 4 ? '#e2e8f0' : '#1e3a8a'
+                    }}
+                  ></div>
+                </div>
+                <strong>{dept.count}</strong>
+              </div>
+            ))}
+          </div>
         </div>
 
-        <div className="admin-table">
-          {queueRows.map((row) => (
-            <div className="admin-table-row" key={row.token}>
-              <strong>{row.token}</strong>
-              <span>{row.patient}</span>
-              <span>{row.department}</span>
-              <em>{row.status}</em>
-            </div>
-          ))}
+        <div className="ao-panel">
+          <h2>Hourly patient volume</h2>
+          <div className="ao-chart-area">
+            {hourlyBuckets.map((count, i) => {
+              const hourLabel = i === 7 ? 'Now' : (() => {
+                const h = startHour + i
+                const ampm = h >= 12 ? 'PM' : 'AM'
+                const displayH = h % 12 || 12
+                return `${displayH}${ampm}`
+              })()
+              
+              const heightPct = Math.max(5, (count / maxHourCount) * 100)
+              
+              return (
+                <div className="ao-chart-bar-wrap" key={i}>
+                  <div className="ao-chart-bar-bg">
+                    <div 
+                      className="ao-chart-bar-fill" 
+                      style={{ 
+                        height: `${heightPct}%`,
+                        backgroundColor: i === 7 ? '#bfdbfe' : '#3b82f6'
+                      }}
+                    ></div>
+                  </div>
+                  <span>{hourLabel}</span>
+                </div>
+              )
+            })}
+          </div>
         </div>
-      </section>
-    </>
+
+        <div className="ao-panel">
+          <h2>Doctor workload — now</h2>
+          <div className="ao-doctor-list">
+            {doctorWorkload.length === 0 ? (
+              <p className="ao-empty">No active doctors</p>
+            ) : doctorWorkload.map(doc => (
+              <div className="ao-doctor-row" key={doc.id}>
+                <div className="ao-doc-avatar">{doc.initials}</div>
+                <div className="ao-doc-info">
+                  <strong>{doc.name}</strong>
+                  <span>{doc.department}</span>
+                </div>
+                <div className="ao-doc-stats">
+                  {doc.seen} seen · {doc.wait} wait
+                </div>
+                <div className={`ao-doc-badge ao-badge-${doc.badgeClass}`}>
+                  {doc.badge}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="ao-panel">
+          <h2>Smart alerts</h2>
+          <div className="ao-alert-list">
+            {alerts.map((alert, i) => (
+              <div className={`ao-alert-card ao-alert-${alert.type}`} key={i}>
+                <div className="ao-alert-dot"></div>
+                <div className="ao-alert-content">
+                  <strong>{alert.title}</strong>
+                  <p>{alert.desc}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
   )
 }
 
