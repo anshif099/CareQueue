@@ -383,6 +383,11 @@ function AdminPage() {
             onEditDoctor={handleDoctorEdit}
             onDeleteDoctor={handleDoctorDelete}
           />
+        ) : activeItem === 'Reports' ? (
+          <ReportsAnalytics 
+            appointments={appointments}
+            doctors={doctors}
+          />
         ) : activeItem === 'Live queues' ? (
           <LiveQueues 
             onLogout={handleLogout} 
@@ -520,6 +525,229 @@ function LiveQueues({ onLogout, appointments, doctors }) {
             </div>
           </div>
         ))}
+      </div>
+    </div>
+  )
+}
+
+function ReportsAnalytics({ appointments, doctors }) {
+  const [currentTime] = useState(() => new Date())
+  const todayKey = getDateKey(currentTime)
+  
+  const todayAppointments = useMemo(() => {
+    return appointments.filter(a => a.dateKey === todayKey)
+  }, [appointments, todayKey])
+
+  const doctorEfficiency = doctors.map(doc => {
+    const docApps = todayAppointments.filter(a => a.doctorId === doc.id)
+    const seen = docApps.filter(a => ['completed', 'done'].includes(String(a.status ?? '').toLowerCase()))
+    const seenCount = seen.length
+    
+    let totalWait = 0
+    let waitCount = 0
+    seen.forEach(app => {
+      if (app.calledAt && app.createdAt) {
+        totalWait += (app.calledAt - app.createdAt) / 60000
+        waitCount++
+      }
+    })
+    
+    const avgWait = waitCount > 0 ? Math.round(totalWait / waitCount) : 0
+    
+    // Heuristic efficiency: 100% minus wait penalty
+    const efficiency = seenCount > 0 ? Math.max(50, Math.min(100, 100 - Math.max(0, avgWait - 5))) : 0
+    
+    return {
+      id: doc.id,
+      name: doc.name,
+      seenCount,
+      avgWait,
+      efficiency
+    }
+  }).sort((a, b) => b.seenCount - a.seenCount)
+
+  let scheduledCount = 0
+  let walkInCount = 0
+  let noShowCount = 0
+  
+  todayAppointments.forEach(app => {
+    const status = String(app.status ?? '').toLowerCase()
+    if (status === 'no-show') {
+      noShowCount++
+    }
+    
+    if (app.isScheduled) {
+      scheduledCount++
+    } else {
+      walkInCount++
+    }
+  })
+  
+  const totalApps = Math.max(1, todayAppointments.length)
+  const scheduledPct = (scheduledCount / totalApps) * 100
+  const walkInPct = (walkInCount / totalApps) * 100
+  const noShowPct = (noShowCount / totalApps) * 100
+
+  const peakData = []
+  const daysOfWeek = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+  const pastWeekApps = appointments.filter(app => {
+    if (!app.createdAt) return false
+    const appDate = new Date(app.createdAt)
+    const diffTime = Math.abs(currentTime - appDate)
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+    return diffDays <= 7
+  })
+  
+  const dayHourMap = {} 
+  pastWeekApps.forEach(app => {
+    const date = new Date(app.createdAt)
+    const day = daysOfWeek[date.getDay()]
+    const h = date.getHours()
+    const ampm = h >= 12 ? 'PM' : 'AM'
+    const nextH = h + 1
+    const nextAmpm = nextH >= 12 && nextH < 24 ? 'PM' : 'AM'
+    const dispH = h % 12 || 12
+    const dispNextH = nextH % 12 || 12
+    const hourStr = `${dispH}${ampm}–${dispNextH}${nextAmpm}`
+    
+    if (!dayHourMap[day]) dayHourMap[day] = {}
+    if (!dayHourMap[day][hourStr]) dayHourMap[day][hourStr] = 0
+    dayHourMap[day][hourStr]++
+  })
+
+  const dayOrder = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri']
+  dayOrder.forEach(day => {
+    if (dayHourMap[day]) {
+      const hours = Object.entries(dayHourMap[day])
+      if (hours.length > 0) {
+        hours.sort((a, b) => b[1] - a[1])
+        peakData.push({
+          day,
+          time: hours[0][0],
+          patients: hours[0][1]
+        })
+      }
+    }
+  })
+  
+  if (peakData.length === 0) {
+    peakData.push({ day: '-', time: 'No data', patients: 0 })
+  }
+
+  const insights = []
+  if (peakData.length > 0 && peakData[0].day !== '-') {
+    const highestPeak = [...peakData].sort((a, b) => b.patients - a.patients)[0]
+    if (highestPeak.patients > 0) {
+      insights.push({
+        type: 'warning',
+        title: `${highestPeak.day} ${highestPeak.time.split('–')[0]} peak is highest`,
+        desc: `Recommend scheduling more staff on ${highestPeak.day}s around ${highestPeak.time}.`
+      })
+    }
+  }
+  
+  const overallWait = doctorEfficiency.reduce((acc, d) => acc + d.avgWait, 0) / Math.max(1, doctorEfficiency.length)
+  if (overallWait < 20) {
+    insights.push({
+      type: 'success',
+      title: `Avg wait time is ${Math.round(overallWait)} min`,
+      desc: `Wait times are well within acceptable limits. Queue management is working efficiently.`
+    })
+  } else {
+    insights.push({
+      type: 'danger',
+      title: `Avg wait time is ${Math.round(overallWait)} min`,
+      desc: `Wait times are elevated. Consider opening additional counters or reviewing consultation times.`
+    })
+  }
+  
+  if (insights.length < 3 && noShowCount > 0) {
+    insights.push({
+      type: 'info',
+      title: `${noShowCount} No-shows today`,
+      desc: `Consider sending SMS reminders 30 mins before estimated appointment times.`
+    })
+  }
+
+  return (
+    <div className="rep-container">
+      <header className="rep-header">
+        <h1>Reports & analytics</h1>
+        <button className="rep-export-btn">Export PDF</button>
+      </header>
+
+      <div className="rep-tabs">
+        <button className="rep-tab active">Daily</button>
+        <button className="rep-tab">Weekly</button>
+        <button className="rep-tab">Monthly</button>
+        <button className="rep-tab">Custom range</button>
+      </div>
+
+      <div className="rep-grid">
+        <div className="rep-card">
+          <h2>Peak hours this week</h2>
+          <div className="rep-peak-list">
+            {peakData.map(p => (
+              <div className="rep-peak-row" key={p.day}>
+                <strong>{p.day}</strong>
+                <span>{p.time}</span>
+                <span className="rep-peak-count">{p.patients} patients</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="rep-card">
+          <h2>Doctor efficiency</h2>
+          <div className="rep-doc-list">
+            {doctorEfficiency.length === 0 ? <p className="rep-empty">No active doctors</p> : doctorEfficiency.map(doc => (
+              <div className="rep-doc-row" key={doc.id}>
+                <strong>{doc.name}</strong>
+                <span className="rep-doc-seen">{doc.seenCount}</span>
+                <span className="rep-doc-wait">{doc.avgWait}m</span>
+                <span className="rep-doc-eff" style={{ color: doc.efficiency > 80 ? '#22c55e' : doc.efficiency > 50 ? '#eab308' : '#ef4444' }}>
+                  {doc.efficiency}%
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div className="rep-card">
+        <h2>Appointment vs walk-in breakdown</h2>
+        <div className="rep-breakdown-grid">
+          <div className="rep-bd-item">
+            <strong>{scheduledCount}</strong>
+            <span>Scheduled appointments</span>
+            <div className="rep-bd-bar"><div style={{ width: `${scheduledPct}%`, background: '#3b82f6' }}></div></div>
+          </div>
+          <div className="rep-bd-item">
+            <strong>{walkInCount}</strong>
+            <span>Walk-in tokens</span>
+            <div className="rep-bd-bar"><div style={{ width: `${walkInPct}%`, background: '#60a5fa' }}></div></div>
+          </div>
+          <div className="rep-bd-item rep-bd-noshow">
+            <strong>{noShowCount}</strong>
+            <span>Appointment no-shows</span>
+            <div className="rep-bd-bar"><div style={{ width: `${noShowPct}%`, background: '#ef4444' }}></div></div>
+          </div>
+        </div>
+      </div>
+
+      <div className="rep-card">
+        <h2>Key insights</h2>
+        <div className="rep-insights-list">
+          {insights.map((ins, i) => (
+            <div className="rep-insight-item" key={i}>
+              <div className={`rep-insight-dot bg-${ins.type}`}></div>
+              <div>
+                <strong>{ins.title}</strong>
+                <p>{ins.desc}</p>
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   )
