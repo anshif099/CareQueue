@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { onValue, push, update, ref as databaseRef, serverTimestamp } from 'firebase/database'
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import { database } from '../lib/firebase.jsx'
 import '../components/SuperAdminPage.css'
 
@@ -16,12 +17,21 @@ function SuperAdminPage() {
   const [activeTab, setActiveTab] = useState('overview')
   
   const [hospitals, setHospitals] = useState([])
-  const [isAddFormOpen, setIsAddFormOpen] = useState(false)
-  const [newHospital, setNewHospital] = useState({ name: '', location: '', contact: '' })
+  const [isHospitalFormOpen, setIsHospitalFormOpen] = useState(false)
+  const [editingHospitalId, setEditingHospitalId] = useState(null)
+  const [hospitalForm, setHospitalForm] = useState({ name: '', location: '', contact: '' })
   
   const [adUrl, setAdUrl] = useState('')
   const [adType, setAdType] = useState('image')
   const [isSavingAd, setIsSavingAd] = useState(false)
+
+  const [doctors, setDoctors] = useState([])
+  const [appointments, setAppointments] = useState([])
+
+  const getTodayKey = () => {
+    const d = new Date()
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+  }
 
   useEffect(() => {
     if (!isAuthed) return
@@ -50,11 +60,39 @@ function SuperAdminPage() {
       }
     })
 
+    const unsubDocs = onValue(databaseRef(database, 'doctors'), (snapshot) => {
+      const data = snapshot.val()
+      if (data) setDoctors(Object.entries(data).map(([id, doc]) => ({ id, ...doc })))
+      else setDoctors([])
+    })
+
+    const unsubAppts = onValue(databaseRef(database, 'appointments'), (snapshot) => {
+      const data = snapshot.val()
+      if (data) setAppointments(Object.entries(data).map(([id, app]) => ({ id, ...app })))
+      else setAppointments([])
+    })
+
     return () => {
       unsubscribe()
       unsubAd()
+      unsubDocs()
+      unsubAppts()
     }
   }, [isAuthed])
+
+  const todayKey = getTodayKey()
+  const todayAppointments = appointments.filter(a => a.dateKey === todayKey)
+  const activeDoctors = doctors.filter(d => (d.status || 'Consulting') === 'Consulting')
+  
+  const hourlyData = Array.from({ length: 12 }, (_, i) => {
+    const hour = i + 8 // 8 AM to 7 PM
+    const count = todayAppointments.filter(app => {
+      if (!app.createdAt) return false
+      const d = new Date(app.createdAt)
+      return d.getHours() === hour
+    }).length
+    return { name: `${hour > 12 ? hour - 12 : hour}${hour >= 12 ? 'pm' : 'am'}`, patients: count }
+  })
 
   const handleLogin = (e) => {
     e.preventDefault()
@@ -74,20 +112,51 @@ function SuperAdminPage() {
     setPassword('')
   }
 
-  const handleAddHospital = async (e) => {
+  const handleSaveHospital = async (e) => {
     e.preventDefault()
-    if (!newHospital.name) return
+    if (!hospitalForm.name) return
 
     try {
-      await push(databaseRef(database, 'hospitals'), {
-        ...newHospital,
-        createdAt: serverTimestamp()
-      })
-      setIsAddFormOpen(false)
-      setNewHospital({ name: '', location: '', contact: '' })
+      if (editingHospitalId) {
+        if (editingHospitalId === 'default-primary') {
+           // Ignore update for primary as it's hardcoded for now, or alert
+           alert('Cannot edit the default primary hospital from here yet.')
+           setIsHospitalFormOpen(false)
+           return
+        }
+        await update(databaseRef(database, `hospitals/${editingHospitalId}`), hospitalForm)
+      } else {
+        await push(databaseRef(database, 'hospitals'), {
+          ...hospitalForm,
+          createdAt: serverTimestamp()
+        })
+      }
+      setIsHospitalFormOpen(false)
+      setHospitalForm({ name: '', location: '', contact: '' })
+      setEditingHospitalId(null)
     } catch (err) {
-      alert('Failed to add hospital: ' + err.message)
+      alert('Failed to save hospital: ' + err.message)
     }
+  }
+
+  const openEditHospital = (hosp) => {
+    if (hosp.isPrimary) {
+      alert('Cannot edit the default primary hospital from here yet.')
+      return
+    }
+    setHospitalForm({
+      name: hosp.name || '',
+      location: hosp.location || '',
+      contact: hosp.contact || ''
+    })
+    setEditingHospitalId(hosp.id)
+    setIsHospitalFormOpen(true)
+  }
+
+  const openAddHospital = () => {
+    setHospitalForm({ name: '', location: '', contact: '' })
+    setEditingHospitalId(null)
+    setIsHospitalFormOpen(true)
   }
 
   const handleLoginAsHospital = (hospitalId) => {
@@ -201,11 +270,29 @@ function SuperAdminPage() {
               </div>
               <div className="sa-stat-card">
                 <span>Active Doctors</span>
-                <strong>--</strong>
+                <strong>{activeDoctors.length}</strong>
               </div>
               <div className="sa-stat-card">
                 <span>Total Patients (Today)</span>
-                <strong>--</strong>
+                <strong>{todayAppointments.length}</strong>
+              </div>
+            </div>
+
+            <div style={{ marginTop: '40px', background: '#0f172a', padding: '24px', borderRadius: '12px', border: '1px solid #1e293b' }}>
+              <h3 style={{ color: '#f8fafc', marginTop: 0, marginBottom: '24px' }}>Hourly Patient Flow (Network Wide)</h3>
+              <div style={{ height: '300px' }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={hourlyData}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
+                    <XAxis dataKey="name" stroke="#94a3b8" tick={{ fill: '#94a3b8' }} />
+                    <YAxis stroke="#94a3b8" tick={{ fill: '#94a3b8' }} allowDecimals={false} />
+                    <Tooltip 
+                      contentStyle={{ backgroundColor: '#1e293b', border: 'none', borderRadius: '8px', color: '#f8fafc' }}
+                      itemStyle={{ color: '#3b82f6' }}
+                    />
+                    <Bar dataKey="patients" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
               </div>
             </div>
           </div>
@@ -215,7 +302,7 @@ function SuperAdminPage() {
           <div className="sa-tab-content">
             <div className="sa-page-header">
               <h2>Manage Hospitals</h2>
-              <button className="sa-primary-btn" onClick={() => setIsAddFormOpen(true)}>
+              <button className="sa-primary-btn" onClick={openAddHospital}>
                 + Add Hospital
               </button>
             </div>
@@ -232,7 +319,7 @@ function SuperAdminPage() {
                       {hosp.contact && <p>Contact: {hosp.contact}</p>}
                     </div>
                     <div className="sa-hospital-actions">
-                      <button className="sa-action-btn">Edit</button>
+                      <button className="sa-action-btn" onClick={() => openEditHospital(hosp)}>Edit</button>
                       <button 
                         className="sa-action-btn login-as" 
                         onClick={() => handleLoginAsHospital(hosp.id)}
@@ -308,39 +395,41 @@ function SuperAdminPage() {
         )}
       </main>
 
-      {isAddFormOpen && (
+      {isHospitalFormOpen && (
         <div className="sa-form-overlay">
-          <form className="sa-form-card" onSubmit={handleAddHospital}>
+          <form className="sa-form-card" onSubmit={handleSaveHospital}>
             <div className="sa-form-header">
-              <h3>Add New Hospital</h3>
-              <button type="button" className="sa-close-btn" onClick={() => setIsAddFormOpen(false)}>&times;</button>
+              <h3>{editingHospitalId ? 'Edit Hospital' : 'Add New Hospital'}</h3>
+              <button type="button" className="sa-close-btn" onClick={() => setIsHospitalFormOpen(false)}>&times;</button>
             </div>
             <div className="sa-form-group">
               <label>Hospital Name</label>
               <input 
                 required
-                value={newHospital.name} 
-                onChange={e => setNewHospital({...newHospital, name: e.target.value})}
+                value={hospitalForm.name} 
+                onChange={e => setHospitalForm({...hospitalForm, name: e.target.value})}
                 placeholder="e.g. City General Hospital"
               />
             </div>
             <div className="sa-form-group">
               <label>Location / Address</label>
               <input 
-                value={newHospital.location} 
-                onChange={e => setNewHospital({...newHospital, location: e.target.value})}
+                value={hospitalForm.location} 
+                onChange={e => setHospitalForm({...hospitalForm, location: e.target.value})}
                 placeholder="e.g. Downtown Metro Area"
               />
             </div>
             <div className="sa-form-group">
               <label>Contact Info</label>
               <input 
-                value={newHospital.contact} 
-                onChange={e => setNewHospital({...newHospital, contact: e.target.value})}
+                value={hospitalForm.contact} 
+                onChange={e => setHospitalForm({...hospitalForm, contact: e.target.value})}
                 placeholder="e.g. admin@citygeneral.com"
               />
             </div>
-            <button type="submit" className="sa-submit-btn">Register Hospital</button>
+            <button type="submit" className="sa-submit-btn">
+              {editingHospitalId ? 'Save Changes' : 'Register Hospital'}
+            </button>
           </form>
         </div>
       )}
