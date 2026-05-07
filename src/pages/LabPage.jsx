@@ -14,8 +14,8 @@ function LabPage() {
   const [searchToken, setSearchToken] = useState('')
   const [activePatientId, setActivePatientId] = useState(null)
   
-  const [billAmount, setBillAmount] = useState('')
   const [medicinesGiven, setMedicinesGiven] = useState(false)
+  const [itemAmounts, setItemAmounts] = useState({})
 
   useEffect(() => {
     const appointmentsRef = databaseRef(database, 'appointments')
@@ -52,15 +52,30 @@ function LabPage() {
   // Handle patient selection
   const handleSelectPatient = (id) => {
     setActivePatientId(id)
-    setBillAmount('')
     setMedicinesGiven(false)
+    setItemAmounts({})
+  }
+
+  const prescriptionLines = useMemo(() => {
+    return activePatient?.prescription ? activePatient.prescription.split('\n').filter(line => line.trim()) : []
+  }, [activePatient])
+
+  const totalBill = useMemo(() => {
+    return Object.values(itemAmounts).reduce((sum, val) => sum + (Number(val) || 0), 0)
+  }, [itemAmounts])
+
+  const handleAmountChange = (index, value) => {
+    setItemAmounts(prev => ({
+      ...prev,
+      [index]: value
+    }))
   }
 
   const handleSubmitLab = async () => {
     if (!activePatient) return
 
     await update(databaseRef(database, `appointments/${activePatient.id}`), {
-      labBillAmount: billAmount || '0',
+      labBillAmount: totalBill || 0,
       medicinesGiven: medicinesGiven,
       labStatus: 'completed',
       labCompletedAt: Date.now()
@@ -68,8 +83,8 @@ function LabPage() {
     
     // Deselect and stay on lab page
     setActivePatientId(null)
-    setBillAmount('')
     setMedicinesGiven(false)
+    setItemAmounts({})
   }
 
   return (
@@ -119,11 +134,24 @@ function LabPage() {
             </header>
 
             <div className="lab-section">
-              <h3>Prescription Details</h3>
-              <div className="lab-prescription-box">
-                {activePatient.prescription ? activePatient.prescription.split('\n').map((line, i) => (
-                  <div key={i}>{line}</div>
-                )) : 'No prescription details provided.'}
+              <h3>Prescription Details & Billing</h3>
+              <div className="lab-prescription-list">
+                {prescriptionLines.length > 0 ? prescriptionLines.map((line, i) => (
+                  <div className="lab-presc-item" key={i}>
+                    <span className="lab-presc-text">{line}</span>
+                    <div className="lab-presc-amount">
+                      <span>₹</span>
+                      <input 
+                        type="number" 
+                        placeholder="0"
+                        value={itemAmounts[i] || ''}
+                        onChange={(e) => handleAmountChange(i, e.target.value)}
+                      />
+                    </div>
+                  </div>
+                )) : (
+                  <p className="lab-empty">No prescription details provided.</p>
+                )}
               </div>
             </div>
 
@@ -139,14 +167,9 @@ function LabPage() {
                 Mark Medicines as Given / Available
               </label>
 
-              <div className="lab-bill-input">
-                <label>Bill Amount (₹)</label>
-                <input 
-                  type="number" 
-                  placeholder="Enter total bill amount"
-                  value={billAmount}
-                  onChange={(e) => setBillAmount(e.target.value)}
-                />
+              <div className="lab-bill-total">
+                <span>Total Bill Amount:</span>
+                <strong>₹ {totalBill}</strong>
               </div>
 
               <button className="lab-submit-btn" onClick={handleSubmitLab}>
