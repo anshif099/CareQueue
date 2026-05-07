@@ -394,6 +394,8 @@ function AdminPage() {
             appointments={appointments}
             doctors={doctors}
           />
+        ) : activeItem === 'Settings' ? (
+          <ClinicSettings />
         ) : (
           <DashboardOverview 
             activeItem={activeItem} 
@@ -761,6 +763,101 @@ function ReportsAnalytics({ appointments, doctors }) {
           ))}
         </div>
       </div>
+    </div>
+  )
+}
+
+function ClinicSettings() {
+  const [settings, setSettings] = useState({
+    clinicName: 'City Health Clinic',
+    opdHours: '8:30 AM – 5:00 PM',
+    maxDailyTokens: '400 per department',
+    tokenPrefixFormat: 'Dept-NNN (e.g. G-001)',
+    appointmentPriority: 'Enabled — appts queue first',
+    gracePeriod: '3 minutes',
+    selfDelay: 'Enabled — 1 per patient',
+    emergencyOverride: 'Reception bypass — always on',
+    alertXAhead: '5 patients',
+    urgentAlertAt: '2 patients',
+    labResultPush: true,
+    appointmentReminders: '24h + 2h + 30 min',
+    smsProvider: 'Twilio (configured)',
+    whatsappAlerts: true,
+    hospitalHIS: 'HL7 FHIR — connected',
+    labSystem: 'Connected — LIS v3.2'
+  })
+
+  const handleChange = (field, value) => {
+    setSettings(prev => ({ ...prev, [field]: value }))
+  }
+
+  const renderRow = (label, field, type="text") => (
+    <div className="cs-row">
+      <span>{label}</span>
+      {type === 'toggle' ? (
+        <div className="cs-toggle-wrap">
+          <span className="cs-toggle-label">{settings[field] ? 'Enabled' : 'Disabled'}</span>
+          <label className="cs-toggle">
+            <input type="checkbox" checked={settings[field]} onChange={(e) => handleChange(field, e.target.checked)} />
+            <span className="cs-toggle-slider"></span>
+          </label>
+        </div>
+      ) : (
+        <input 
+          className="cs-input" 
+          value={settings[field]} 
+          onChange={(e) => handleChange(field, e.target.value)} 
+          spellCheck="false"
+        />
+      )}
+    </div>
+  )
+
+  return (
+    <div className="cs-container">
+      <header className="cs-header">
+        <h1>Clinic settings</h1>
+      </header>
+
+      <section className="cs-section">
+        <h2>Clinic details</h2>
+        <div className="cs-card">
+          {renderRow('Clinic name', 'clinicName')}
+          {renderRow('OPD hours', 'opdHours')}
+          {renderRow('Max daily tokens', 'maxDailyTokens')}
+          {renderRow('Token prefix format', 'tokenPrefixFormat')}
+        </div>
+      </section>
+
+      <section className="cs-section">
+        <h2>Queue rules</h2>
+        <div className="cs-card">
+          {renderRow('Appointment priority', 'appointmentPriority')}
+          {renderRow('Grace period (no-show)', 'gracePeriod')}
+          {renderRow('Self-delay option', 'selfDelay')}
+          {renderRow('Emergency override', 'emergencyOverride')}
+        </div>
+      </section>
+
+      <section className="cs-section">
+        <h2>Notification settings</h2>
+        <div className="cs-card">
+          {renderRow('Alert at X ahead', 'alertXAhead')}
+          {renderRow('Urgent alert at', 'urgentAlertAt')}
+          {renderRow('Lab result push alert', 'labResultPush', 'toggle')}
+          {renderRow('Appointment reminders', 'appointmentReminders')}
+        </div>
+      </section>
+
+      <section className="cs-section">
+        <h2>Integrations</h2>
+        <div className="cs-card">
+          {renderRow('SMS provider', 'smsProvider')}
+          {renderRow('WhatsApp alerts', 'whatsappAlerts', 'toggle')}
+          {renderRow('Hospital HIS sync', 'hospitalHIS')}
+          {renderRow('Lab system integration', 'labSystem')}
+        </div>
+      </section>
     </div>
   )
 }
