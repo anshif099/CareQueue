@@ -297,15 +297,41 @@ function DoctorPage() {
     })
   }
 
+  function generateVisitSummary(patient, rx) {
+    const dateStr = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short' }).format(new Date())
+    const vitals = []
+    if (patient.bp) vitals.push(`BP: ${patient.bp}`)
+    if (patient.temperature) vitals.push(`Temp: ${patient.temperature}`)
+    if (patient.pulse) vitals.push(`Pulse: ${patient.pulse}`)
+    if (patient.spo2) vitals.push(`SpO2: ${patient.spo2}`)
+    
+    const vitalsStr = vitals.length > 0 ? vitals.join(', ') : ''
+    const rxStr = rx.trim() ? `Rx: ${rx.trim()}` : ''
+    
+    const parts = [dateStr]
+    if (vitalsStr) parts.push(vitalsStr)
+    if (rxStr) parts.push(rxStr)
+    
+    return parts.join(' — ')
+  }
+
   async function handleMarkComplete() {
     if (!queueState.currentPatient?.id) {
       return
     }
 
+    const summary = generateVisitSummary(queueState.currentPatient, prescription)
+    const existingHistory = Array.isArray(queueState.currentPatient.visitHistory) 
+      ? queueState.currentPatient.visitHistory 
+      : []
+    const dateStr = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short' }).format(new Date())
+    const newHistory = existingHistory.filter(h => !h.startsWith(dateStr)).concat(summary)
+
     await updateCurrentAppointment({
       status: 'completed',
       completedAt: Date.now(),
       prescription: prescription.trim(),
+      visitHistory: newHistory
     })
     await update(databaseRef(database, `doctors/${doctor.id}`), {
       currentToken: queueState.upcomingQueue[0]?.token ?? '',
@@ -359,9 +385,19 @@ function DoctorPage() {
   }
 
   async function handleSendPrescription() {
+    if (!queueState.currentPatient?.id) return
+
+    const summary = generateVisitSummary(queueState.currentPatient, prescription)
+    const existingHistory = Array.isArray(queueState.currentPatient.visitHistory) 
+      ? queueState.currentPatient.visitHistory 
+      : []
+    const dateStr = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short' }).format(new Date())
+    const newHistory = existingHistory.filter(h => !h.startsWith(dateStr)).concat(summary)
+
     await updateCurrentAppointment({
       prescription: prescription.trim(),
       prescriptionSentAt: Date.now(),
+      visitHistory: newHistory
     })
   }
 
