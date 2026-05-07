@@ -28,10 +28,17 @@ function SuperAdminPage() {
 
     const unsubscribe = onValue(databaseRef(database, 'hospitals'), (snapshot) => {
       const data = snapshot.val()
+      const defaultHospital = { 
+        id: 'default-primary', 
+        name: 'City Health Clinic (Primary)', 
+        location: 'Main Headquarters', 
+        contact: 'admin@cityhealth.com', 
+        isPrimary: true 
+      }
       if (!data) {
-        setHospitals([])
+        setHospitals([defaultHospital])
       } else {
-        setHospitals(Object.entries(data).map(([id, info]) => ({ id, ...info })))
+        setHospitals([defaultHospital, ...Object.entries(data).map(([id, info]) => ({ id, ...info }))])
       }
     })
 
