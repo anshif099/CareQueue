@@ -63,6 +63,15 @@ const translations = {
     shareCopied: 'Token details copied',
     shareShared: 'Shared',
     shareFailed: 'Share not available',
+    openLiveQueue: 'Open live queue',
+    liveQueue: 'Live queue',
+    yourToken: 'YOUR TOKEN',
+    inConsult: 'In consult',
+    queueProgress: 'Queue progress',
+    prepareConsultation: 'Prepare for consultation',
+    consultationReady:
+      'Please have your previous prescriptions and reports ready. Proceed to the waiting area outside {counter}.',
+    delayTurn: 'I need more time - delay my turn',
     loginRegister: 'Register / Login',
     mobileNumber: 'Mobile number',
     mobilePlaceholder: 'Enter 10-digit mobile',
@@ -422,6 +431,11 @@ function getTokenNumber(doctor, sequence) {
   return `${getTokenPrefix(doctor)}-${String(Number(sequence) || 1).padStart(3, '0')}`
 }
 
+function getTokenSequence(token) {
+  const sequence = String(token ?? '').match(/\d+$/)?.[0]
+  return Number(sequence) || 0
+}
+
 function getDoctorCounter(doctor) {
   if (doctor?.counter) {
     return doctor.counter
@@ -522,6 +536,55 @@ function enrichDoctorsWithLiveQueues(doctors, appointments, dateKey) {
       waiting: queue.length,
     }
   })
+}
+
+function getLiveQueueStatus({ appointment, appointments = [], doctor }) {
+  const liveAppointment =
+    appointments.find((currentAppointment) => currentAppointment.id === appointment?.id) ??
+    appointment
+  const appointmentDateKey = liveAppointment?.dateKey ?? getDateKey(new Date())
+  const queue = getDoctorQueue(doctor, appointments, appointmentDateKey)
+  const queueWithCurrent =
+    liveAppointment && !queue.some((currentAppointment) => currentAppointment.id === liveAppointment.id)
+      ? [...queue, liveAppointment].sort(compareAppointments)
+      : queue
+  const appointmentIndex = queueWithCurrent.findIndex(
+    (currentAppointment) => currentAppointment.id === liveAppointment?.id,
+  )
+  const aheadCount =
+    appointmentIndex >= 0 ? appointmentIndex : Number(liveAppointment?.aheadAtBooking) || 0
+  const waitMinutes =
+    appointmentIndex >= 0
+      ? aheadCount *
+        getAverageSlotMinutes(doctor?.startTime, doctor?.endTime, doctor?.appointmentsPerDay)
+      : Number(liveAppointment?.estimatedWaitMinutes) || 0
+  const token = liveAppointment?.token ?? getTokenNumber(doctor, liveAppointment?.sequence)
+  const departmentName = liveAppointment?.department || doctor?.department || ''
+  const doctorName = liveAppointment?.doctorName || doctor?.name || ''
+  const counter = liveAppointment?.counter || getDoctorCounter(doctor)
+  const servingAppointment = queueWithCurrent[0]
+  const servingToken = servingAppointment?.token || doctor?.servingToken || token
+  const tokenSequence = Number(liveAppointment?.sequence) || getTokenSequence(token)
+  const servingSequence =
+    Number(servingAppointment?.sequence) || getTokenSequence(servingToken) || tokenSequence
+  const progressPercent =
+    tokenSequence > 0
+      ? Math.max(8, Math.min(100, Math.round((servingSequence / tokenSequence) * 100)))
+      : aheadCount === 0
+        ? 100
+        : 18
+
+  return {
+    aheadCount,
+    counter,
+    departmentName,
+    doctorName,
+    liveAppointment,
+    progressPercent,
+    servingToken,
+    token,
+    waitMinutes,
+  }
 }
 
 function mapDoctors(snapshot) {
@@ -812,12 +875,22 @@ function FirstMobilePage() {
             text={text}
             time={time}
           />
-        ) : (
+        ) : screen === 'token' ? (
           <TokenIssuedPage
             appointments={appointments}
             appointment={issuedAppointment}
             doctor={selectedLiveDoctor}
             onBack={() => setScreen('booking')}
+            onOpenQueue={() => setScreen('queue')}
+            text={text}
+            time={time}
+          />
+        ) : (
+          <LiveQueuePage
+            appointments={appointments}
+            appointment={issuedAppointment}
+            doctor={selectedLiveDoctor}
+            onBack={() => setScreen('token')}
             text={text}
             time={time}
           />
@@ -1289,32 +1362,18 @@ function BookingPage({ doctor, onBack, onConfirm, text, time }) {
   )
 }
 
-function TokenIssuedPage({ appointment, appointments = [], doctor, onBack, text, time }) {
+function TokenIssuedPage({ appointment, appointments = [], doctor, onBack, onOpenQueue, text, time }) {
   const [shareStatus, setShareStatus] = useState('')
-  const liveAppointment =
-    appointments.find((currentAppointment) => currentAppointment.id === appointment?.id) ??
-    appointment
-  const appointmentDateKey = liveAppointment?.dateKey ?? getDateKey(new Date())
-  const queue = getDoctorQueue(doctor, appointments, appointmentDateKey)
-  const queueWithCurrent =
-    liveAppointment && !queue.some((currentAppointment) => currentAppointment.id === liveAppointment.id)
-      ? [...queue, liveAppointment].sort(compareAppointments)
-      : queue
-  const appointmentIndex = queueWithCurrent.findIndex(
-    (currentAppointment) => currentAppointment.id === liveAppointment?.id,
-  )
-  const aheadCount =
-    appointmentIndex >= 0 ? appointmentIndex : Number(liveAppointment?.aheadAtBooking) || 0
-  const waitMinutes =
-    appointmentIndex >= 0
-      ? aheadCount *
-        getAverageSlotMinutes(doctor?.startTime, doctor?.endTime, doctor?.appointmentsPerDay)
-      : Number(liveAppointment?.estimatedWaitMinutes) || 0
-  const token = liveAppointment?.token ?? getTokenNumber(doctor, liveAppointment?.sequence)
-  const departmentName = liveAppointment?.department || doctor?.department || ''
-  const doctorName = liveAppointment?.doctorName || doctor?.name || ''
-  const counter = liveAppointment?.counter || getDoctorCounter(doctor)
-  const servingToken = queueWithCurrent[0]?.token || doctor?.servingToken || token
+  const {
+    aheadCount,
+    counter,
+    departmentName,
+    doctorName,
+    liveAppointment,
+    servingToken,
+    token,
+    waitMinutes,
+  } = getLiveQueueStatus({ appointment, appointments, doctor })
   const shareText = [
     `CareQueue token: ${token}`,
     `Doctor: ${doctorName}`,
@@ -1362,13 +1421,18 @@ function TokenIssuedPage({ appointment, appointments = [], doctor, onBack, text,
       </header>
 
       <section className="token-content">
-        <div className="token-number-card">
+        <button
+          className="token-number-card"
+          type="button"
+          onClick={onOpenQueue}
+          aria-label={`${text.openLiveQueue}: ${token}`}
+        >
           <p>{text.tokenNumber}</p>
           <strong>{token}</strong>
           <span>
             {departmentName} · {counter}
           </span>
-        </div>
+        </button>
 
         <div className="token-summary">
           <div>
@@ -1412,6 +1476,79 @@ function TokenIssuedPage({ appointment, appointments = [], doctor, onBack, text,
 
         <button className="token-share" data-state={shareStatus ? 'done' : 'idle'} type="button" onClick={handleShare}>
           {shareStatus || text.shareFamily}
+        </button>
+      </section>
+    </div>
+  )
+}
+
+function LiveQueuePage({ appointment, appointments = [], doctor, onBack, text, time }) {
+  const {
+    aheadCount,
+    counter,
+    doctorName,
+    progressPercent,
+    servingToken,
+    token,
+    waitMinutes,
+  } = getLiveQueueStatus({ appointment, appointments, doctor })
+  const queueTitle = [token, doctorName].filter(Boolean).join(' · ')
+  const consultationMessage = text.consultationReady.replace('{counter}', counter)
+
+  return (
+    <div className="live-queue-page">
+      <header className="live-queue-hero">
+        <div className="department-hero-bar">
+          <div className="department-status">{time}</div>
+          <button className="department-back-button" type="button" onClick={onBack} aria-label="Go back">
+            ←
+          </button>
+        </div>
+        <h1>{text.liveQueue}</h1>
+        <p>{queueTitle}</p>
+      </header>
+
+      <section className="live-queue-content">
+        <div className="live-token-card">
+          <p>{text.yourToken}</p>
+          <strong>{token}</strong>
+          <span>
+            {aheadCount} {text.patientsAhead}
+          </span>
+        </div>
+
+        <div className="live-queue-summary">
+          <div>
+            <strong>{aheadCount}</strong>
+            <span>{text.ahead}</span>
+          </div>
+          <div>
+            <strong>~{waitMinutes}m</strong>
+            <span>{text.wait}</span>
+          </div>
+          <div>
+            <strong>{servingToken}</strong>
+            <span>{text.inConsult}</span>
+          </div>
+        </div>
+
+        <div className="live-progress">
+          <p>{text.queueProgress}</p>
+          <div className="live-progress-track" aria-label={`${text.queueProgress}: ${progressPercent}%`}>
+            <i style={{ width: `${progressPercent}%` }}></i>
+          </div>
+          <span>
+            {servingToken} of {token}
+          </span>
+        </div>
+
+        <div className="live-consult-card">
+          <strong>{text.prepareConsultation}</strong>
+          <p>{consultationMessage}</p>
+        </div>
+
+        <button className="live-delay-button" type="button" disabled>
+          {text.delayTurn}
         </button>
       </section>
     </div>
