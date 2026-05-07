@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
+  get,
   onValue,
   push,
   ref as databaseRef,
@@ -62,6 +63,20 @@ const translations = {
     shareCopied: 'Token details copied',
     shareShared: 'Shared',
     shareFailed: 'Share not available',
+    loginRegister: 'Register / Login',
+    mobileNumber: 'Mobile number',
+    mobilePlaceholder: 'Enter 10-digit mobile',
+    fullName: 'Full name',
+    fullNamePlaceholder: 'Patient name',
+    login: 'Login',
+    register: 'Register',
+    loginHelp: 'Use your registered mobile number to continue.',
+    registerHelp: 'Create your patient profile with a mobile number.',
+    mobileInvalid: 'Enter a valid 10-digit mobile number.',
+    nameRequired: 'Enter patient name to register.',
+    userNotFound: 'No patient found with this mobile number. Please register.',
+    userAlreadyExists: 'This mobile number is already registered. Please login.',
+    authFailed: 'Could not continue. Please try again.',
   },
   hi: {
     clinic: 'सिटी हेल्थ क्लिनिक',
@@ -173,6 +188,53 @@ const departmentDescriptions = {
 }
 
 const storageKey = 'carequeue-language'
+const userStorageKey = 'carequeue-user'
+
+function normalizeMobileInput(value) {
+  const digits = String(value ?? '').replace(/\D/g, '')
+  const localDigits = digits.length > 10 && digits.startsWith('91') ? digits.slice(2) : digits
+  return localDigits.slice(0, 10)
+}
+
+function formatMobileNumber(mobile) {
+  const digits = normalizeMobileInput(mobile)
+
+  if (digits.length !== 10) {
+    return digits
+  }
+
+  return `+91 ${digits.slice(0, 5)} ${digits.slice(5)}`
+}
+
+function getInitialUser() {
+  if (typeof window === 'undefined') {
+    return null
+  }
+
+  try {
+    const savedUser = JSON.parse(window.localStorage.getItem(userStorageKey) ?? 'null')
+
+    if (savedUser?.mobile && normalizeMobileInput(savedUser.mobile).length === 10) {
+      return {
+        id: savedUser.id ?? normalizeMobileInput(savedUser.mobile),
+        name: savedUser.name ?? '',
+        mobile: normalizeMobileInput(savedUser.mobile),
+      }
+    }
+  } catch {
+    return null
+  }
+
+  return null
+}
+
+function saveUserSession(user) {
+  try {
+    window.localStorage.setItem(userStorageKey, JSON.stringify(user))
+  } catch {
+    // The current session still works when local storage is unavailable.
+  }
+}
 
 function getInitialLanguage() {
   if (typeof window === 'undefined') {
@@ -516,7 +578,8 @@ function groupDepartments(doctors) {
 function FirstMobilePage() {
   const [selectedLanguage, setSelectedLanguage] = useState(getInitialLanguage)
   const [time, setTime] = useState(getDeviceTime)
-  const [screen, setScreen] = useState('language')
+  const [screen, setScreen] = useState('auth')
+  const [currentUser, setCurrentUser] = useState(getInitialUser)
   const [selectedDepartment, setSelectedDepartment] = useState(null)
   const [selectedDoctor, setSelectedDoctor] = useState(null)
   const [issuedAppointment, setIssuedAppointment] = useState(null)
@@ -575,6 +638,59 @@ function FirstMobilePage() {
     return unsubscribe
   }, [])
 
+  async function handleUserAuth({ mode, name, mobile }) {
+    const normalizedMobile = normalizeMobileInput(mobile)
+    const patientName = name.trim()
+
+    if (normalizedMobile.length !== 10) {
+      throw new Error(text.mobileInvalid)
+    }
+
+    if (mode === 'register' && !patientName) {
+      throw new Error(text.nameRequired)
+    }
+
+    const patientReference = databaseRef(database, `patients/${normalizedMobile}`)
+    const patientSnapshot = await get(patientReference)
+
+    if (mode === 'login') {
+      if (!patientSnapshot.exists()) {
+        throw new Error(text.userNotFound)
+      }
+
+      const patient = patientSnapshot.val()
+      const loggedInUser = {
+        id: patient?.id ?? normalizedMobile,
+        name: patient?.name ?? '',
+        mobile: normalizedMobile,
+      }
+
+      setCurrentUser(loggedInUser)
+      saveUserSession(loggedInUser)
+      setScreen('language')
+      return
+    }
+
+    if (patientSnapshot.exists()) {
+      throw new Error(text.userAlreadyExists)
+    }
+
+    const registeredUser = {
+      id: normalizedMobile,
+      name: patientName,
+      mobile: normalizedMobile,
+    }
+
+    await setDatabaseValue(patientReference, {
+      ...registeredUser,
+      createdAt: serverTimestamp(),
+    })
+
+    setCurrentUser(registeredUser)
+    saveUserSession(registeredUser)
+    setScreen('language')
+  }
+
   async function handleConfirmAppointment(appointment) {
     if (!selectedLiveDoctor?.id) {
       throw new Error('Doctor details are not available')
@@ -612,6 +728,9 @@ function FirstMobilePage() {
       token,
       sequence,
       counter,
+      patientId: currentUser?.id ?? '',
+      patientName: currentUser?.name ?? '',
+      patientMobile: currentUser?.mobile ?? '',
       status: 'waiting',
       aheadAtBooking: queueAhead,
       estimatedWaitMinutes: queueAhead * averageSlotMinutes,
@@ -641,10 +760,17 @@ function FirstMobilePage() {
     <main className="carequeue-app" aria-label="CareQueue welcome screen">
       <section
         className={`carequeue-phone ${
-          screen !== 'language' ? 'carequeue-phone-departments' : ''
+          screen !== 'auth' && screen !== 'language' ? 'carequeue-phone-departments' : ''
         }`}
       >
-        {screen === 'language' ? (
+        {screen === 'auth' ? (
+          <UserMobileAuth
+            currentUser={currentUser}
+            onContinue={handleUserAuth}
+            text={text}
+            time={time}
+          />
+        ) : screen === 'language' ? (
           <LanguageSelection
             activeLanguage={activeLanguage}
             selectedLanguage={selectedLanguage}
@@ -698,6 +824,118 @@ function FirstMobilePage() {
         )}
       </section>
     </main>
+  )
+}
+
+function UserMobileAuth({ currentUser, onContinue, text, time }) {
+  const [mode, setMode] = useState(currentUser?.mobile ? 'login' : 'register')
+  const [name, setName] = useState(currentUser?.name ?? '')
+  const [mobile, setMobile] = useState(currentUser?.mobile ?? '')
+  const [error, setError] = useState('')
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const isRegistering = mode === 'register'
+
+  async function handleSubmit(event) {
+    event.preventDefault()
+    setError('')
+    setIsSubmitting(true)
+
+    try {
+      await onContinue({ mode, name, mobile })
+    } catch (authError) {
+      setError(authError.message || text.authFailed)
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  function selectMode(nextMode) {
+    setMode(nextMode)
+    setError('')
+  }
+
+  return (
+    <>
+      <div className="carequeue-status" aria-label={`Current time ${time}`}>
+        {time}
+      </div>
+
+      <div className="carequeue-brand carequeue-auth-brand">
+        <div className="carequeue-logo" aria-hidden="true">
+          <span className="carequeue-plus"></span>
+        </div>
+
+        <h1 className="carequeue-title">CareQueue</h1>
+        <p className="carequeue-clinic">{text.clinic}</p>
+      </div>
+
+      <form className="carequeue-auth-panel" onSubmit={handleSubmit}>
+        <h2>{text.loginRegister}</h2>
+
+        <div className="carequeue-auth-toggle" aria-label={text.loginRegister}>
+          <button
+            type="button"
+            aria-pressed={mode === 'login'}
+            onClick={() => selectMode('login')}
+          >
+            {text.login}
+          </button>
+          <button
+            type="button"
+            aria-pressed={isRegistering}
+            onClick={() => selectMode('register')}
+          >
+            {text.register}
+          </button>
+        </div>
+
+        <p className="carequeue-auth-copy">{isRegistering ? text.registerHelp : text.loginHelp}</p>
+
+        {isRegistering && (
+          <label className="carequeue-auth-field">
+            <span>{text.fullName}</span>
+            <input
+              autoComplete="name"
+              disabled={isSubmitting}
+              onChange={(event) => setName(event.target.value)}
+              placeholder={text.fullNamePlaceholder}
+              type="text"
+              value={name}
+            />
+          </label>
+        )}
+
+        <label className="carequeue-auth-field">
+          <span>{text.mobileNumber}</span>
+          <div className="carequeue-mobile-input">
+            <b>+91</b>
+            <input
+              autoComplete="tel"
+              disabled={isSubmitting}
+              inputMode="numeric"
+              maxLength={10}
+              onChange={(event) => setMobile(normalizeMobileInput(event.target.value))}
+              placeholder={text.mobilePlaceholder}
+              type="tel"
+              value={mobile}
+            />
+          </div>
+        </label>
+
+        {error && <p className="carequeue-auth-error">{error}</p>}
+
+        <button className="carequeue-next-button carequeue-auth-submit" disabled={isSubmitting} type="submit">
+          {isSubmitting ? 'Please wait...' : isRegistering ? text.register : text.login}
+        </button>
+      </form>
+
+      {currentUser?.mobile && (
+        <p className="carequeue-helper">
+          {currentUser.name ? `${currentUser.name} - ` : ''}
+          {formatMobileNumber(currentUser.mobile)}
+        </p>
+      )}
+    </>
   )
 }
 

@@ -204,6 +204,151 @@
   text-align: center;
 }
 
+.carequeue-auth-brand {
+  margin-top: clamp(38px, 8svh, 58px);
+}
+
+.carequeue-auth-panel {
+  width: var(--content-width);
+  display: grid;
+  gap: 12px;
+  margin-top: clamp(28px, 5svh, 36px);
+}
+
+.carequeue-auth-panel h2 {
+  margin: 0;
+  color: #fff;
+  font-size: 20px;
+  font-weight: 850;
+  line-height: 1.15;
+  text-align: center;
+}
+
+.carequeue-auth-toggle {
+  min-height: 44px;
+  border-radius: 10px;
+  background: #134f87;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px;
+  padding: 4px;
+}
+
+.carequeue-auth-toggle button {
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #a9d0f2;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 850;
+  line-height: 1;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.carequeue-auth-toggle button[aria-pressed='true'] {
+  background: #e8f5ee;
+  color: #134d37;
+}
+
+.carequeue-auth-copy {
+  margin: -2px 0 0;
+  color: #9fc9ed;
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 1.25;
+  text-align: center;
+}
+
+.carequeue-auth-field {
+  display: grid;
+  gap: 6px;
+}
+
+.carequeue-auth-field span {
+  color: #d8edff;
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.carequeue-auth-field input,
+.carequeue-mobile-input {
+  min-height: 46px;
+  border: 1px solid rgba(158, 218, 255, 0.44);
+  border-radius: 10px;
+  background: #fff;
+  box-sizing: border-box;
+  color: #0a1a27;
+}
+
+.carequeue-auth-field input {
+  width: 100%;
+  padding: 0 14px;
+  font-size: 15px;
+  font-weight: 750;
+}
+
+.carequeue-auth-field input::placeholder {
+  color: #9aa8b6;
+}
+
+.carequeue-auth-field input:focus,
+.carequeue-mobile-input:focus-within {
+  border-color: #bde7ff;
+  outline: 3px solid rgba(207, 235, 255, 0.34);
+  outline-offset: 1px;
+}
+
+.carequeue-mobile-input {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  overflow: hidden;
+}
+
+.carequeue-mobile-input b {
+  height: 100%;
+  min-width: 48px;
+  background: #e8f5ee;
+  color: #134d37;
+  display: grid;
+  font-size: 14px;
+  font-weight: 900;
+  line-height: 1;
+  place-items: center;
+}
+
+.carequeue-mobile-input input {
+  min-height: 44px;
+  border: 0;
+  border-radius: 0;
+  outline: 0;
+}
+
+.carequeue-auth-error {
+  border-radius: 8px;
+  background: rgba(255, 229, 225, 0.16);
+  color: #ffd8d2;
+  margin: 0;
+  padding: 10px 12px;
+  font-size: 13px;
+  font-weight: 750;
+  line-height: 1.25;
+  text-align: center;
+}
+
+.carequeue-auth-submit {
+  background: #e8f5ee;
+  color: #134d37;
+  margin-top: 0;
+}
+
+.carequeue-auth-submit:disabled {
+  cursor: default;
+  opacity: 0.62;
+}
+
 .carequeue-phone-departments {
   background: #fff;
   display: block;
@@ -872,6 +1017,10 @@
 @media (max-height: 620px) {
   .carequeue-brand {
     margin-top: 34px;
+  }
+
+  .carequeue-auth-brand {
+    margin-top: 24px;
   }
 
   .carequeue-language-panel {
