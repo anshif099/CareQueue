@@ -1,10 +1,12 @@
 .doctor-login-page,
 .doctor-console {
   width: 100%;
-  min-height: 100dvh;
+  height: 100%;
+  max-height: 100%;
   background: #252622;
   color: #f4f4ef;
   overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .doctor-login-page {
