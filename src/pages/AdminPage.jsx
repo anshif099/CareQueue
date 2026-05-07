@@ -418,6 +418,24 @@ function LiveQueues({ onLogout, appointments, doctors }) {
 
   const deptStats = {}
   
+  doctors.forEach(doc => {
+    if (doc.department) {
+      if (!deptStats[doc.department]) {
+        deptStats[doc.department] = {
+          name: doc.department,
+          waitCount: 0,
+          totalToday: 0,
+          completedCount: 0,
+          totalWaitTime: 0,
+          docs: new Set(),
+          servingToken: '--',
+          servingTokens: []
+        }
+      }
+      deptStats[doc.department].docs.add(doc.id)
+    }
+  })
+  
   todayAppointments.forEach(app => {
     const dept = app.department || 'Unknown'
     if (!deptStats[dept]) {
@@ -448,14 +466,6 @@ function LiveQueues({ onLogout, appointments, doctors }) {
       } else {
         deptStats[dept].waitCount++
       }
-    }
-  })
-
-  // Add dummy depts to match screenshot if empty
-  const defaultDepts = ['General OPD', 'Paediatrics', 'Gynaecology', 'Orthopaedics', 'ENT', 'Dermatology']
-  defaultDepts.forEach(d => {
-    if (!deptStats[d]) {
-      deptStats[d] = { name: d, waitCount: 0, totalToday: 0, completedCount: 0, totalWaitTime: 0, docs: new Set(), servingToken: '--', servingTokens: [] }
     }
   })
 
@@ -490,7 +500,9 @@ function LiveQueues({ onLogout, appointments, doctors }) {
       </header>
 
       <div className="lq-grid">
-        {deptCards.slice(0, 6).map((dept, i) => (
+        {deptCards.length === 0 ? (
+          <p className="ao-empty" style={{ gridColumn: '1 / -1', padding: '40px 0' }}>No active departments or live queues today.</p>
+        ) : deptCards.map((dept, i) => (
           <div className="lq-card" key={i}>
             <h3 style={{ color: dept.color }}>{dept.name}</h3>
             <div className="lq-card-main">
@@ -503,47 +515,11 @@ function LiveQueues({ onLogout, appointments, doctors }) {
               <div className="lq-progress-fill" style={{ width: `${dept.percent}%`, backgroundColor: dept.color }}></div>
             </div>
             <div className="lq-card-footer">
-              <span>Avg {dept.avgWait || 15}m</span>
-              <span>{dept.docCount} doctor{dept.docCount !== 1 ? 's' : ''} · {dept.totalToday || 5} appts today</span>
+              <span>Avg {dept.avgWait || 0}m</span>
+              <span>{dept.docCount} doctor{dept.docCount !== 1 ? 's' : ''} · {dept.totalToday || 0} appts today</span>
             </div>
           </div>
         ))}
-      </div>
-
-      <div className="lq-support">
-        <h2>Support services</h2>
-        <div className="lq-support-list">
-          <div className="lq-support-row">
-            <div>
-              <strong>Laboratory</strong>
-              <span>Serving L-089 · avg 8m</span>
-            </div>
-            <div className="lq-support-right">
-              <span>22 waiting</span>
-              <div className="lq-badge-critical">Critical</div>
-            </div>
-          </div>
-          <div className="lq-support-row">
-            <div>
-              <strong>Pharmacy</strong>
-              <span>Serving PH-041 · avg 4m</span>
-            </div>
-            <div className="lq-support-right">
-              <span>5 waiting</span>
-              <div className="lq-badge-normal">Normal</div>
-            </div>
-          </div>
-          <div className="lq-support-row">
-            <div>
-              <strong>Radiology</strong>
-              <span>Serving R-014 · avg 35m</span>
-            </div>
-            <div className="lq-support-right">
-              <span>8 waiting</span>
-              <div className="lq-badge-watch">Watch</div>
-            </div>
-          </div>
-        </div>
       </div>
     </div>
   )
