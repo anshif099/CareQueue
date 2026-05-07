@@ -223,7 +223,12 @@ function TvPage() {
           <section className="tv-serving-section">
             <h2 className="tv-section-title">NOW SERVING</h2>
             <div className="tv-serving-display">
-              <div className="tv-huge-token">{mainCurrentPatient?.token || mainDoctor.servingToken || '--'}</div>
+              <div 
+                className="tv-huge-token" 
+                data-empty={!(mainCurrentPatient?.token || mainDoctor.servingToken)}
+              >
+                {mainCurrentPatient?.token || mainDoctor.servingToken || 'WAITING'}
+              </div>
               <div className="tv-serving-details">
                 <span className="tv-pill">{getDoctorCounter(mainDoctor)}</span>
                 <span className="tv-dept-text">{mainDoctor.department} — Consultation</span>

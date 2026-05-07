@@ -211,6 +211,7 @@
   display: flex;
   flex-direction: column;
   border-right: 1px solid #1e293b;
+  overflow: hidden;
 }
 
 .tv-right-panel {
@@ -218,6 +219,7 @@
   display: flex;
   flex-direction: column;
   background: #0b111a;
+  overflow: hidden;
 }
 
 .tv-section-title {
@@ -243,12 +245,21 @@
 }
 
 .tv-huge-token {
-  font-size: 180px;
+  font-size: 160px;
   font-weight: 800;
   line-height: 1;
   color: #f8fafc;
-  margin-bottom: 32px;
+  margin-bottom: 24px;
   letter-spacing: -2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tv-huge-token[data-empty='true'] {
+  font-size: 60px;
+  color: #475569;
+  letter-spacing: normal;
 }
 
 .tv-serving-details {
@@ -369,12 +380,18 @@
   font-size: 18px;
   color: #60a5fa;
   font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .tv-upnext-row em {
   font-size: 18px;
   color: #64748b;
   font-style: normal;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .tv-pill-dark {
@@ -398,15 +415,18 @@
 
 .tv-dept-row {
   display: grid;
-  grid-template-columns: 100px 1fr 40px 60px;
+  grid-template-columns: minmax(100px, 1.2fr) 2fr 40px 60px;
   align-items: center;
   gap: 16px;
 }
 
 .tv-dept-row span {
   color: #94a3b8;
-  font-size: 18px;
+  font-size: 16px;
   font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .tv-bar-bg {
