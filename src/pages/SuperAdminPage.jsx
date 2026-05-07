@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { onValue, push, ref as databaseRef, serverTimestamp } from 'firebase/database'
+import { onValue, push, update, ref as databaseRef, serverTimestamp } from 'firebase/database'
 import { database } from '../lib/firebase.jsx'
 import '../components/SuperAdminPage.css'
 
@@ -18,6 +18,10 @@ function SuperAdminPage() {
   const [hospitals, setHospitals] = useState([])
   const [isAddFormOpen, setIsAddFormOpen] = useState(false)
   const [newHospital, setNewHospital] = useState({ name: '', location: '', contact: '' })
+  
+  const [adUrl, setAdUrl] = useState('')
+  const [adType, setAdType] = useState('image')
+  const [isSavingAd, setIsSavingAd] = useState(false)
 
   useEffect(() => {
     if (!isAuthed) return
@@ -26,12 +30,23 @@ function SuperAdminPage() {
       const data = snapshot.val()
       if (!data) {
         setHospitals([])
-        return
+      } else {
+        setHospitals(Object.entries(data).map(([id, info]) => ({ id, ...info })))
       }
-      setHospitals(Object.entries(data).map(([id, info]) => ({ id, ...info })))
     })
 
-    return () => unsubscribe()
+    const unsubAd = onValue(databaseRef(database, 'settings/tvAd'), (snapshot) => {
+      const data = snapshot.val()
+      if (data) {
+        setAdUrl(data.url || '')
+        setAdType(data.type || 'image')
+      }
+    })
+
+    return () => {
+      unsubscribe()
+      unsubAd()
+    }
   }, [isAuthed])
 
   const handleLogin = (e) => {
@@ -75,6 +90,21 @@ function SuperAdminPage() {
     sessionStorage.setItem('carequeue-admin', '1')
     sessionStorage.setItem('carequeue-active-hospital', hospitalId)
     window.location.href = '/admin'
+  }
+
+  const handleSaveAd = async (e) => {
+    e.preventDefault()
+    setIsSavingAd(true)
+    try {
+      await update(databaseRef(database, 'settings'), {
+        tvAd: { url: adUrl, type: adType }
+      })
+      alert('TV Advertisement updated successfully!')
+    } catch (err) {
+      alert('Failed to save ad: ' + err.message)
+    } finally {
+      setIsSavingAd(false)
+    }
   }
 
   if (!isAuthed) {
@@ -211,9 +241,55 @@ function SuperAdminPage() {
         )}
 
         {activeTab === 'publishing' && (
-          <div className="sa-placeholder">
-            <h3>Publishing Configuration</h3>
-            <p>Manage content, ads, and network-wide broadcasts here.</p>
+          <div className="sa-tab-content">
+            <div className="sa-page-header">
+              <h2>Publishing Configuration</h2>
+            </div>
+            
+            <div className="sa-hospital-card" style={{ maxWidth: '600px' }}>
+              <h3>TV Screen Advertisement</h3>
+              <p>Configure the image or video that plays on the right side of the TV display.</p>
+              
+              <form onSubmit={handleSaveAd} style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginTop: '16px' }}>
+                <div className="sa-form-group" style={{ margin: 0 }}>
+                  <label>Media Type</label>
+                  <select 
+                    value={adType} 
+                    onChange={e => setAdType(e.target.value)}
+                    style={{ background: '#1e293b', border: '1px solid #334155', color: '#f8fafc', padding: '12px', borderRadius: '6px', fontSize: '15px', outline: 'none' }}
+                  >
+                    <option value="image">Image (JPG, PNG, GIF)</option>
+                    <option value="video">Video (MP4, WebM)</option>
+                  </select>
+                </div>
+                
+                <div className="sa-form-group" style={{ margin: 0 }}>
+                  <label>Media URL (Image or Video Link)</label>
+                  <input 
+                    required
+                    type="url"
+                    value={adUrl} 
+                    onChange={e => setAdUrl(e.target.value)}
+                    placeholder="https://example.com/ad.jpg"
+                  />
+                </div>
+
+                {adUrl && (
+                  <div style={{ marginTop: '8px', border: '1px dashed #334155', borderRadius: '8px', padding: '8px', background: '#020617' }}>
+                    <p style={{ marginBottom: '8px', fontSize: '12px', color: '#94a3b8' }}>Preview:</p>
+                    {adType === 'video' ? (
+                      <video src={adUrl} controls style={{ width: '100%', maxHeight: '200px', objectFit: 'contain' }} />
+                    ) : (
+                      <img src={adUrl} alt="Ad preview" style={{ width: '100%', maxHeight: '200px', objectFit: 'contain' }} />
+                    )}
+                  </div>
+                )}
+                
+                <button type="submit" className="sa-submit-btn" disabled={isSavingAd}>
+                  {isSavingAd ? 'Saving...' : 'Publish to TV Screens'}
+                </button>
+              </form>
+            </div>
           </div>
         )}
 

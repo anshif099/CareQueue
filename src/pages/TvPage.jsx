@@ -71,6 +71,7 @@ function TvPage() {
   const [dataError, setDataError] = useState('')
   const [isDoctorsLoading, setIsDoctorsLoading] = useState(true)
   const [currentTime, setCurrentTime] = useState(getDeviceTime())
+  const [tvAd, setTvAd] = useState(null)
 
   useEffect(() => {
     const timer = window.setInterval(() => {
@@ -98,6 +99,13 @@ function TvPage() {
   useEffect(() => {
     const unsubscribe = onValue(databaseRef(database, 'appointments'), (snapshot) => {
       setAppointments(mapAppointments(snapshot))
+    })
+    return unsubscribe
+  }, [])
+
+  useEffect(() => {
+    const unsubscribe = onValue(databaseRef(database, 'settings/tvAd'), (snapshot) => {
+      setTvAd(snapshot.val())
     })
     return unsubscribe
   }, [])
@@ -253,8 +261,19 @@ function TvPage() {
           </section>
         </div>
 
-        <div className="tv-right-panel" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          {/* Ad Space */}
+        <div className="tv-right-panel" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0, overflow: 'hidden' }}>
+          {tvAd?.url ? (
+            tvAd.type === 'video' ? (
+              <video src={tvAd.url} autoPlay loop muted style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            ) : (
+              <img src={tvAd.url} alt="Advertisement" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            )
+          ) : (
+            <div style={{ color: '#334155', textAlign: 'center', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+               <h2 style={{ fontSize: '32px', margin: 0 }}>Ad Space</h2>
+               <p style={{ fontSize: '16px', margin: 0 }}>Configure in Super Admin panel (Publishing)</p>
+            </div>
+          )}
         </div>
       </div>
 
