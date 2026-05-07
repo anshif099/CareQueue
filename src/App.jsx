@@ -1,6 +1,7 @@
 import HomePage from './pages/HomePage.jsx'
 import AdminPage from './pages/AdminPage.jsx'
 import DoctorPage from './pages/DoctorPage.jsx'
+import TvPage from './pages/TvPage.jsx'
 
 function App() {
   const route = window.location.pathname.replace(/\/+$/, '')
@@ -11,6 +12,10 @@ function App() {
 
   if (route === '/doctor') {
     return <DoctorPage />
+  }
+
+  if (route === '/tv') {
+    return <TvPage />
   }
 
   return <HomePage />

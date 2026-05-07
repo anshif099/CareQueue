@@ -1,0 +1,300 @@
+import { useEffect, useMemo, useState } from 'react'
+import { onValue, ref as databaseRef } from 'firebase/database'
+import { database } from '../lib/firebase.jsx'
+import '../components/TvDashboard.css'
+
+const doctorSessionKey = 'carequeue-doctor-id'
+
+function getDeviceTime() {
+  const parts = new Intl.DateTimeFormat(undefined, {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: true,
+  }).formatToParts(new Date())
+
+  const hour = parts.find((part) => part.type === 'hour')?.value ?? '12'
+  const minute = parts.find((part) => part.type === 'minute')?.value ?? '00'
+  const second = parts.find((part) => part.type === 'second')?.value ?? '00'
+  const dayPeriod = parts.find((part) => part.type === 'dayPeriod')?.value ?? 'am'
+  
+  return { time: `${hour}:${minute}:${second}`, period: dayPeriod.toLowerCase() }
+}
+
+function getDateKey(date) {
+  return [
+    date.getFullYear(),
+    String(date.getMonth() + 1).padStart(2, '0'),
+    String(date.getDate()).padStart(2, '0'),
+  ].join('-')
+}
+
+function mapDoctors(snapshot) {
+  const doctors = snapshot.val()
+  if (!doctors) return []
+  return Object.entries(doctors).map(([id, doctor]) => ({ id, ...doctor }))
+}
+
+function mapAppointments(snapshot) {
+  const appointments = snapshot.val()
+  if (!appointments) return []
+  return Object.entries(appointments).map(([id, appointment]) => ({ id, ...appointment }))
+}
+
+function isActiveAppointment(appointment) {
+  const status = String(appointment?.status ?? 'waiting').toLowerCase()
+  return !['completed', 'done', 'cancelled', 'canceled', 'skipped', 'no-show'].includes(status)
+}
+
+function compareAppointments(firstAppointment, secondAppointment) {
+  const firstSequence = Number(firstAppointment.sequence) || Number.MAX_SAFE_INTEGER
+  const secondSequence = Number(secondAppointment.sequence) || Number.MAX_SAFE_INTEGER
+
+  if (firstSequence !== secondSequence) {
+    return firstSequence - secondSequence
+  }
+  return (Number(firstAppointment.createdAt) || 0) - (Number(secondAppointment.createdAt) || 0)
+}
+
+function getDoctorCounter(doctor) {
+  if (doctor?.counter) return doctor.counter
+  if (doctor?.counterName) return doctor.counterName
+  return 'Counter 1'
+}
+
+function TvPage() {
+  const [doctors, setDoctors] = useState([])
+  const [appointments, setAppointments] = useState([])
+  const [loginId, setLoginId] = useState('')
+  const [doctorId, setDoctorId] = useState(() => sessionStorage.getItem(doctorSessionKey) || '')
+  const [error, setError] = useState('')
+  const [dataError, setDataError] = useState('')
+  const [isDoctorsLoading, setIsDoctorsLoading] = useState(true)
+  const [currentTime, setCurrentTime] = useState(getDeviceTime())
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      setCurrentTime(getDeviceTime())
+    }, 1000)
+    return () => window.clearInterval(timer)
+  }, [])
+
+  useEffect(() => {
+    const unsubscribe = onValue(
+      databaseRef(database, 'doctors'),
+      (snapshot) => {
+        setDoctors(mapDoctors(snapshot))
+        setIsDoctorsLoading(false)
+        setDataError('')
+      },
+      (firebaseError) => {
+        setDataError(firebaseError.message)
+        setIsDoctorsLoading(false)
+      },
+    )
+    return unsubscribe
+  }, [])
+
+  useEffect(() => {
+    const unsubscribe = onValue(databaseRef(database, 'appointments'), (snapshot) => {
+      setAppointments(mapAppointments(snapshot))
+    })
+    return unsubscribe
+  }, [])
+
+  function handleLogin(event) {
+    event.preventDefault()
+    const normalizedLogin = loginId.trim().toLowerCase()
+    const matchedDoctor = doctors.find(
+      (currentDoctor) => String(currentDoctor.loginId ?? '').trim().toLowerCase() === normalizedLogin,
+    )
+
+    if (!matchedDoctor) {
+      setError('Doctor login ID not found')
+      return
+    }
+
+    sessionStorage.setItem(doctorSessionKey, matchedDoctor.id)
+    setDoctorId(matchedDoctor.id)
+    setError('')
+  }
+
+  const todayKey = getDateKey(new Date())
+
+  // Process data for the TV screen
+  const mainDoctor = doctors.find(d => d.id === doctorId)
+  
+  const allActiveAppointments = useMemo(() => {
+    return appointments
+      .filter((app) => app.dateKey === todayKey && isActiveAppointment(app))
+      .sort(compareAppointments)
+  }, [appointments, todayKey])
+
+  const mainDoctorQueue = useMemo(() => {
+    if (!mainDoctor) return []
+    return allActiveAppointments.filter(app => app.doctorId === mainDoctor.id)
+  }, [allActiveAppointments, mainDoctor])
+
+  const mainInConsult = useMemo(() => {
+    return mainDoctorQueue.find(app => ['in_consult', 'serving'].includes(String(app.status ?? '').toLowerCase())) || null
+  }, [mainDoctorQueue])
+
+  const mainCurrentPatient = mainInConsult || mainDoctorQueue[0] || null
+  const mainUpcomingQueue = mainDoctorQueue.filter(app => app.id !== mainCurrentPatient?.id)
+
+  const activeCounters = useMemo(() => {
+    return doctors.filter(d => (d.status ?? 'Consulting') === 'Consulting' || d.servingToken).map(d => {
+      const dQueue = allActiveAppointments.filter(app => app.doctorId === d.id)
+      const inCons = dQueue.find(app => ['in_consult', 'serving'].includes(String(app.status ?? '').toLowerCase()))
+      const curr = inCons || dQueue[0] || null
+      return {
+        id: d.id,
+        name: d.name,
+        department: d.department,
+        counter: getDoctorCounter(d),
+        token: curr?.token || d.servingToken || '--',
+        status: d.status || 'Consulting'
+      }
+    })
+  }, [doctors, allActiveAppointments])
+
+  const departmentStats = useMemo(() => {
+    const deps = {}
+    doctors.forEach(d => {
+      if (!d.department) return
+      if (!deps[d.department]) deps[d.department] = { waiting: 0, avgWait: 15 }
+      const dQueue = allActiveAppointments.filter(app => app.doctorId === d.id)
+      deps[d.department].waiting += dQueue.length
+    })
+    return Object.entries(deps).map(([name, stats]) => ({ name, ...stats }))
+  }, [doctors, allActiveAppointments])
+
+  if (!doctorId || (!mainDoctor && !isDoctorsLoading)) {
+    return (
+      <main className="tv-login-page">
+        <form className="tv-login-card" onSubmit={handleLogin}>
+          <div>
+            <p>TV Display</p>
+            <h1>Select Doctor</h1>
+            <span>Enter the doctor login ID to configure this screen.</span>
+          </div>
+          <label>
+            Doctor login ID
+            <input
+              autoComplete="username"
+              value={loginId}
+              onChange={(event) => setLoginId(event.target.value)}
+              placeholder="rajan-opd"
+            />
+          </label>
+          {(error || dataError) && <p className="tv-login-error">{error || dataError}</p>}
+          <button disabled={isDoctorsLoading} type="submit">
+            {isDoctorsLoading ? 'Loading...' : 'Start TV Display'}
+          </button>
+        </form>
+      </main>
+    )
+  }
+
+  if (!mainDoctor) {
+    return <main className="tv-console tv-console-loading">Loading TV display...</main>
+  }
+
+  return (
+    <main className="tv-console">
+      <header className="tv-header">
+        <div className="tv-logo-area">
+          <div className="tv-logo-icon">+</div>
+          <div className="tv-logo-text">
+            <h1>CareQueue · City Health Clinic</h1>
+            <p>Outpatient Department</p>
+          </div>
+        </div>
+        <div className="tv-header-right">
+          <div className="tv-live-badge"><span className="tv-dot"></span> Live</div>
+          <div className="tv-time">
+            {currentTime.time} <span>{currentTime.period}</span>
+          </div>
+        </div>
+      </header>
+
+      <div className="tv-main-grid">
+        <div className="tv-left-panel">
+          <section className="tv-serving-section">
+            <h2 className="tv-section-title">NOW SERVING</h2>
+            <div className="tv-serving-display">
+              <div className="tv-huge-token">{mainCurrentPatient?.token || mainDoctor.servingToken || '--'}</div>
+              <div className="tv-serving-details">
+                <span className="tv-pill">{getDoctorCounter(mainDoctor)}</span>
+                <span className="tv-dept-text">{mainDoctor.department} — Consultation</span>
+              </div>
+              <div className="tv-serving-doctor">{mainDoctor.name}</div>
+            </div>
+          </section>
+
+          <section className="tv-counters-section">
+            <h2 className="tv-section-title">COUNTER STATUS</h2>
+            <div className="tv-counters-grid">
+              {activeCounters.slice(0, 6).map(counter => (
+                <div className="tv-counter-card" key={counter.id}>
+                  <span>{counter.counter}</span>
+                  <strong>{counter.token}</strong>
+                  <em data-status={counter.status === 'Consulting' ? 'open' : 'closed'}>
+                    {counter.status === 'Consulting' ? 'Open' : counter.status}
+                  </em>
+                </div>
+              ))}
+            </div>
+          </section>
+        </div>
+
+        <div className="tv-right-panel">
+          <section className="tv-upnext-section">
+            <h2 className="tv-section-title">UP NEXT · {mainUpcomingQueue.length} WAITING</h2>
+            <div className="tv-upnext-list">
+              {mainUpcomingQueue.length === 0 ? (
+                <div className="tv-empty-queue">No patients in queue</div>
+              ) : (
+                mainUpcomingQueue.slice(0, 5).map(app => (
+                  <div className="tv-upnext-row" key={app.id}>
+                    <strong>{app.token}</strong>
+                    <span>{mainDoctor.department}</span>
+                    <em>{mainDoctor.name}</em>
+                    <div className="tv-pill-dark">{getDoctorCounter(mainDoctor)}</div>
+                  </div>
+                ))
+              )}
+            </div>
+          </section>
+
+          <section className="tv-deptload-section">
+            <h2 className="tv-section-title">DEPARTMENT LOAD</h2>
+            <div className="tv-deptload-list">
+              {departmentStats.slice(0, 4).map((dept, i) => (
+                <div className="tv-dept-row" key={dept.name}>
+                  <span>{dept.name}</span>
+                  <div className="tv-bar-bg">
+                    <div className="tv-bar-fill" style={{ width: `${Math.min(100, Math.max(5, (dept.waiting / 15) * 100))}%`, backgroundColor: i === 0 ? '#1e78c8' : i === 1 ? '#4b8822' : i === 2 ? '#902c3e' : '#a2621d' }}></div>
+                  </div>
+                  <em>{dept.waiting}</em>
+                  <small>{dept.waiting * dept.avgWait}m</small>
+                </div>
+              ))}
+            </div>
+          </section>
+        </div>
+      </div>
+
+      <footer className="tv-ticker">
+        <div className="tv-ticker-content">
+          {activeCounters.map(c => (
+            <span key={c.id}>{c.department} — now serving {c.token} · {c.counter} &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span>
+          ))}
+          <span>Please keep your previous prescriptions and reports ready.</span>
+        </div>
+      </footer>
+    </main>
+  )
+}
+
+export default TvPage
