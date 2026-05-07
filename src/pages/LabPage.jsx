@@ -136,10 +136,13 @@ function LabPage() {
             <div className="lab-section">
               <h3>Prescription Details & Billing</h3>
               <div className="lab-prescription-list">
-                {prescriptionLines.length > 0 ? prescriptionLines.map((line, i) => (
+                {prescriptionLines.length > 0 ? prescriptionLines.map((line, i) => {
+                  const isMedicine = line.trim().startsWith('•') || line.trim().startsWith('-') || line.trim().startsWith('*') || /^\d+\./.test(line.trim())
+                  return (
                   <div className="lab-presc-item" key={i}>
-                    <span className="lab-presc-text">{line}</span>
-                    <div className="lab-presc-amount">
+                    <span className="lab-presc-text" style={{ color: isMedicine ? '#fff' : '#a3a3a3' }}>{line}</span>
+                    {isMedicine && (
+                      <div className="lab-presc-amount">
                       <span>₹</span>
                       <input 
                         type="number" 
@@ -147,9 +150,10 @@ function LabPage() {
                         value={itemAmounts[i] || ''}
                         onChange={(e) => handleAmountChange(i, e.target.value)}
                       />
-                    </div>
+                      </div>
+                    )}
                   </div>
-                )) : (
+                )}) : (
                   <p className="lab-empty">No prescription details provided.</p>
                 )}
               </div>
