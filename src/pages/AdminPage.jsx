@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { onValue, push, ref as databaseRef, serverTimestamp, update, remove } from 'firebase/database'
+import { onValue, push, ref as databaseRef, serverTimestamp, update, remove, get, child } from 'firebase/database'
 import { database } from '../lib/firebase.jsx'
 import '../components/AdminDashboard.css'
 
@@ -170,7 +170,7 @@ function AdminPage() {
     }
   }, [isAuthed])
 
-  function handleLogin(event) {
+  async function handleLogin(event) {
     event.preventDefault()
 
     if (
@@ -178,9 +178,28 @@ function AdminPage() {
       formData.password === adminCredentials.password
     ) {
       sessionStorage.setItem('carequeue-admin', '1')
+      sessionStorage.setItem('carequeue-active-hospital', 'default-primary')
       setIsAuthed(true)
       setError('')
       return
+    }
+
+    try {
+      const snapshot = await get(child(databaseRef(database), 'hospitals'))
+      const data = snapshot.val()
+      if (data) {
+        const hospitalsList = Object.entries(data).map(([id, info]) => ({ id, ...info }))
+        const matched = hospitalsList.find(h => h.adminUsername === formData.username && h.adminPassword === formData.password)
+        if (matched) {
+          sessionStorage.setItem('carequeue-admin', '1')
+          sessionStorage.setItem('carequeue-active-hospital', matched.id)
+          setIsAuthed(true)
+          setError('')
+          return
+        }
+      }
+    } catch (err) {
+      console.error('Login error checking hospitals', err)
     }
 
     setError('Invalid username or password')

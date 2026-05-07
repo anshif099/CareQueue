@@ -19,7 +19,7 @@ function SuperAdminPage() {
   const [hospitals, setHospitals] = useState([])
   const [isHospitalFormOpen, setIsHospitalFormOpen] = useState(false)
   const [editingHospitalId, setEditingHospitalId] = useState(null)
-  const [hospitalForm, setHospitalForm] = useState({ name: '', location: '', contact: '' })
+  const [hospitalForm, setHospitalForm] = useState({ name: '', location: '', contact: '', adminUsername: '', adminPassword: '' })
   
   const [adUrl, setAdUrl] = useState('')
   const [adType, setAdType] = useState('image')
@@ -147,14 +147,16 @@ function SuperAdminPage() {
     setHospitalForm({
       name: hosp.name || '',
       location: hosp.location || '',
-      contact: hosp.contact || ''
+      contact: hosp.contact || '',
+      adminUsername: hosp.adminUsername || '',
+      adminPassword: hosp.adminPassword || ''
     })
     setEditingHospitalId(hosp.id)
     setIsHospitalFormOpen(true)
   }
 
   const openAddHospital = () => {
-    setHospitalForm({ name: '', location: '', contact: '' })
+    setHospitalForm({ name: '', location: '', contact: '', adminUsername: '', adminPassword: '' })
     setEditingHospitalId(null)
     setIsHospitalFormOpen(true)
   }
@@ -425,6 +427,27 @@ function SuperAdminPage() {
                 value={hospitalForm.contact} 
                 onChange={e => setHospitalForm({...hospitalForm, contact: e.target.value})}
                 placeholder="e.g. admin@citygeneral.com"
+              />
+            </div>
+            <hr style={{ border: 'none', borderTop: '1px solid #1e293b', margin: '16px 0' }} />
+            <h4 style={{ margin: '0 0 16px 0', color: '#f8fafc', fontSize: '16px' }}>Admin Panel Credentials</h4>
+            <div className="sa-form-group">
+              <label>Admin Login ID</label>
+              <input 
+                required
+                value={hospitalForm.adminUsername} 
+                onChange={e => setHospitalForm({...hospitalForm, adminUsername: e.target.value})}
+                placeholder="e.g. city-admin"
+              />
+            </div>
+            <div className="sa-form-group">
+              <label>Admin Password</label>
+              <input 
+                required
+                value={hospitalForm.adminPassword} 
+                onChange={e => setHospitalForm({...hospitalForm, adminPassword: e.target.value})}
+                placeholder="e.g. password123"
+                type="text"
               />
             </div>
             <button type="submit" className="sa-submit-btn">
