@@ -3,6 +3,7 @@ import AdminPage from './pages/AdminPage.jsx'
 import DoctorPage from './pages/DoctorPage.jsx'
 import TvPage from './pages/TvPage.jsx'
 import LabPage from './pages/LabPage.jsx'
+import SuperAdminPage from './pages/SuperAdminPage.jsx'
 
 function App() {
   const route = window.location.pathname.replace(/\/+$/, '')
@@ -21,6 +22,10 @@ function App() {
 
   if (route === '/lab') {
     return <LabPage />
+  }
+
+  if (route === '/superadmin') {
+    return <SuperAdminPage />
   }
 
   return <HomePage />
