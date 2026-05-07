@@ -814,6 +814,7 @@ function DoctorManagement({
                 doctor={doctor} 
                 seenCount={seenCount}
                 waitingCount={waitingCount}
+                totalBooked={doctorAppointments.length}
                 key={doctor.id} 
                 onEdit={() => onEditDoctor(doctor)}
                 onDelete={() => onDeleteDoctor(doctor.id)}
@@ -868,8 +869,9 @@ function TimeSelectGroup({ hour, minute, onUpdateField, period, prefix }) {
   )
 }
 
-function DoctorCard({ doctor, seenCount, waitingCount, onEdit, onDelete }) {
+function DoctorCard({ doctor, seenCount, waitingCount, totalBooked, onEdit, onDelete }) {
   const appointmentsPerDay = Number(doctor.appointmentsPerDay) || 0
+  const remainingAppts = Math.max(0, appointmentsPerDay - (totalBooked || 0))
 
   return (
     <article className="doctor-card">
@@ -903,7 +905,7 @@ function DoctorCard({ doctor, seenCount, waitingCount, onEdit, onDelete }) {
           <span>Waiting</span>
         </div>
         <div>
-          <strong>{appointmentsPerDay}</strong>
+          <strong>{remainingAppts}</strong>
           <span>Appts</span>
         </div>
         <div>
