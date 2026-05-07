@@ -531,15 +531,30 @@ function LiveQueues({ onLogout, appointments, doctors }) {
 }
 
 function ReportsAnalytics({ appointments, doctors }) {
+  const [activeTab, setActiveTab] = useState('Daily')
   const [currentTime] = useState(() => new Date())
   const todayKey = getDateKey(currentTime)
   
-  const todayAppointments = useMemo(() => {
-    return appointments.filter(a => a.dateKey === todayKey)
-  }, [appointments, todayKey])
+  const filteredAppointments = useMemo(() => {
+    return appointments.filter(app => {
+      if (!app.createdAt) return false
+      
+      if (activeTab === 'Daily') {
+        return app.dateKey === todayKey
+      }
+      
+      const appDate = new Date(app.createdAt)
+      const diffTime = Math.abs(currentTime - appDate)
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+      
+      if (activeTab === 'Weekly') return diffDays <= 7
+      if (activeTab === 'Monthly') return diffDays <= 30
+      return true // Custom range/All time
+    })
+  }, [appointments, todayKey, currentTime, activeTab])
 
   const doctorEfficiency = doctors.map(doc => {
-    const docApps = todayAppointments.filter(a => a.doctorId === doc.id)
+    const docApps = filteredAppointments.filter(a => a.doctorId === doc.id)
     const seen = docApps.filter(a => ['completed', 'done'].includes(String(a.status ?? '').toLowerCase()))
     const seenCount = seen.length
     
@@ -570,7 +585,7 @@ function ReportsAnalytics({ appointments, doctors }) {
   let walkInCount = 0
   let noShowCount = 0
   
-  todayAppointments.forEach(app => {
+  filteredAppointments.forEach(app => {
     const status = String(app.status ?? '').toLowerCase()
     if (status === 'no-show') {
       noShowCount++
@@ -583,23 +598,15 @@ function ReportsAnalytics({ appointments, doctors }) {
     }
   })
   
-  const totalApps = Math.max(1, todayAppointments.length)
+  const totalApps = Math.max(1, filteredAppointments.length)
   const scheduledPct = (scheduledCount / totalApps) * 100
   const walkInPct = (walkInCount / totalApps) * 100
   const noShowPct = (noShowCount / totalApps) * 100
 
   const peakData = []
   const daysOfWeek = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
-  const pastWeekApps = appointments.filter(app => {
-    if (!app.createdAt) return false
-    const appDate = new Date(app.createdAt)
-    const diffTime = Math.abs(currentTime - appDate)
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
-    return diffDays <= 7
-  })
-  
   const dayHourMap = {} 
-  pastWeekApps.forEach(app => {
+  filteredAppointments.forEach(app => {
     const date = new Date(app.createdAt)
     const day = daysOfWeek[date.getDay()]
     const h = date.getHours()
@@ -673,14 +680,19 @@ function ReportsAnalytics({ appointments, doctors }) {
     <div className="rep-container">
       <header className="rep-header">
         <h1>Reports & analytics</h1>
-        <button className="rep-export-btn">Export PDF</button>
+        <button className="rep-export-btn" onClick={() => window.print()}>Export PDF</button>
       </header>
 
       <div className="rep-tabs">
-        <button className="rep-tab active">Daily</button>
-        <button className="rep-tab">Weekly</button>
-        <button className="rep-tab">Monthly</button>
-        <button className="rep-tab">Custom range</button>
+        {['Daily', 'Weekly', 'Monthly', 'Custom range'].map(tab => (
+          <button 
+            key={tab}
+            className={`rep-tab ${activeTab === tab ? 'active' : ''}`}
+            onClick={() => setActiveTab(tab)}
+          >
+            {tab}
+          </button>
+        ))}
       </div>
 
       <div className="rep-grid">
