@@ -253,40 +253,8 @@ function TvPage() {
           </section>
         </div>
 
-        <div className="tv-right-panel">
-          <section className="tv-upnext-section">
-            <h2 className="tv-section-title">UP NEXT · {mainUpcomingQueue.length} WAITING</h2>
-            <div className="tv-upnext-list">
-              {mainUpcomingQueue.length === 0 ? (
-                <div className="tv-empty-queue">No patients in queue</div>
-              ) : (
-                mainUpcomingQueue.slice(0, 5).map(app => (
-                  <div className="tv-upnext-row" key={app.id}>
-                    <strong>{app.token}</strong>
-                    <span>{mainDoctor.department}</span>
-                    <em>{mainDoctor.name}</em>
-                    <div className="tv-pill-dark">{getDoctorCounter(mainDoctor)}</div>
-                  </div>
-                ))
-              )}
-            </div>
-          </section>
-
-          <section className="tv-deptload-section">
-            <h2 className="tv-section-title">DEPARTMENT LOAD</h2>
-            <div className="tv-deptload-list">
-              {departmentStats.slice(0, 4).map((dept, i) => (
-                <div className="tv-dept-row" key={dept.name}>
-                  <span>{dept.name}</span>
-                  <div className="tv-bar-bg">
-                    <div className="tv-bar-fill" style={{ width: `${Math.min(100, Math.max(5, (dept.waiting / 15) * 100))}%`, backgroundColor: i === 0 ? '#1e78c8' : i === 1 ? '#4b8822' : i === 2 ? '#902c3e' : '#a2621d' }}></div>
-                  </div>
-                  <em>{dept.waiting}</em>
-                  <small>{dept.waiting * dept.avgWait}m</small>
-                </div>
-              ))}
-            </div>
-          </section>
+        <div className="tv-right-panel" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          {/* Ad Space */}
         </div>
       </div>
 
