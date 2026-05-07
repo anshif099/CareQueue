@@ -274,6 +274,11 @@ function DoctorPage() {
     await update(databaseRef(database, `appointments/${queueState.currentPatient.id}`), values)
   }
 
+  async function handleVitalChange(field, value) {
+    if (!queueState.currentPatient?.id) return
+    await updateCurrentAppointment({ [field]: value.trim() })
+  }
+
   async function handleCallNext() {
     const nextPatient = queueState.inConsult ? queueState.upcomingQueue[0] : queueState.currentPatient
 
@@ -458,19 +463,39 @@ function DoctorPage() {
 
             <div className="doctor-vital-grid">
               <div>
-                <strong>{currentPatient.bp || '--'}</strong>
+                <input
+                  key={`bp-${currentPatient.id}`}
+                  defaultValue={currentPatient.bp || ''}
+                  placeholder="--"
+                  onBlur={(e) => handleVitalChange('bp', e.target.value)}
+                />
                 <span>BP (mmHg)</span>
               </div>
               <div>
-                <strong>{currentPatient.temperature || '--'}</strong>
+                <input
+                  key={`temp-${currentPatient.id}`}
+                  defaultValue={currentPatient.temperature || ''}
+                  placeholder="--"
+                  onBlur={(e) => handleVitalChange('temperature', e.target.value)}
+                />
                 <span>Temp (F)</span>
               </div>
               <div>
-                <strong>{currentPatient.pulse || '--'}</strong>
+                <input
+                  key={`pulse-${currentPatient.id}`}
+                  defaultValue={currentPatient.pulse || ''}
+                  placeholder="--"
+                  onBlur={(e) => handleVitalChange('pulse', e.target.value)}
+                />
                 <span>Pulse</span>
               </div>
               <div>
-                <strong>{currentPatient.spo2 || '--'}</strong>
+                <input
+                  key={`spo2-${currentPatient.id}`}
+                  defaultValue={currentPatient.spo2 || ''}
+                  placeholder="--"
+                  onBlur={(e) => handleVitalChange('spo2', e.target.value)}
+                />
                 <span>SpO2</span>
               </div>
             </div>
