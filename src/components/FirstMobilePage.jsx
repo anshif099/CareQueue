@@ -362,34 +362,59 @@ function isSameCalendarDate(firstDate, secondDate) {
 }
 
 function getAppointmentSlots(doctor, selectedDate) {
-  const startTotal = parseTimeToMinutes(doctor?.startTime)
-  let endTotal = parseTimeToMinutes(doctor?.endTime)
-  const maxSlots = Math.max(6, Math.min(14, Number(doctor?.appointmentsPerDay) || 8))
-
-  if (endTotal <= startTotal) {
-    endTotal += 24 * 60
+  let allSchedules = []
+  if (doctor?.startTime && doctor?.endTime) {
+    allSchedules.push({ startTime: doctor.startTime, endTime: doctor.endTime })
+  }
+  if (doctor?.additionalSchedules && Array.isArray(doctor.additionalSchedules)) {
+    allSchedules = allSchedules.concat(doctor.additionalSchedules)
   }
 
-  const slotStep = Math.max(20, Math.floor((endTotal - startTotal) / maxSlots))
+  let totalDuration = 0
+  allSchedules.forEach(sched => {
+    let st = parseTimeToMinutes(sched.startTime)
+    let et = parseTimeToMinutes(sched.endTime)
+    if (et <= st) et += 24 * 60
+    totalDuration += (et - st)
+  })
+
+  const maxSlots = Math.max(6, Math.min(14, Number(doctor?.appointmentsPerDay) || 8))
+  const slotStep = Math.max(20, Math.floor(totalDuration / maxSlots))
+  
   const now = new Date()
   const nowTotal = now.getHours() * 60 + now.getMinutes()
-  const waitingDelay = isSameCalendarDate(selectedDate, now) ? getDoctorWait(doctor) * slotStep : 0
-  const liveStart = isSameCalendarDate(selectedDate, now)
-    ? Math.max(startTotal, nowTotal) + waitingDelay
-    : startTotal
-  const firstSlotTotal = startTotal + Math.max(0, Math.ceil((liveStart - startTotal) / slotStep)) * slotStep
-  const slots = []
+  const isToday = isSameCalendarDate(selectedDate, now)
+  const waitingDelay = isToday ? getDoctorWait(doctor) * slotStep : 0
 
-  for (
-    let slotTotal = firstSlotTotal;
-    slots.length < maxSlots && slotTotal < endTotal;
-    slotTotal += slotStep
-  ) {
-    const value = formatMinutesAsTime(slotTotal)
-    slots.push({
-      value,
-      label: formatMinutesAs12Hour(slotTotal),
-    })
+  const slots = []
+  let generatedCount = 0
+
+  for (let i = 0; i < allSchedules.length; i++) {
+    const sched = allSchedules[i]
+    let st = parseTimeToMinutes(sched.startTime)
+    let et = parseTimeToMinutes(sched.endTime)
+    if (et <= st) et += 24 * 60
+
+    let blockStart = st
+    if (isToday) {
+      blockStart = Math.max(blockStart, nowTotal)
+    }
+
+    let firstSlotTotal = st + Math.max(0, Math.ceil((blockStart - st) / slotStep)) * slotStep
+    
+    // Apply wait delay to the first active block
+    if (isToday && firstSlotTotal >= nowTotal && waitingDelay > 0 && slots.length === 0) {
+      firstSlotTotal += waitingDelay
+    }
+
+    for (let slotTotal = firstSlotTotal; slotTotal < et && generatedCount < maxSlots; slotTotal += slotStep) {
+      const value = formatMinutesAsTime(slotTotal)
+      slots.push({
+        value,
+        label: formatMinutesAs12Hour(slotTotal),
+      })
+      generatedCount++
+    }
   }
 
   return slots

@@ -30,6 +30,7 @@ const emptyDoctorForm = {
   endPeriod: 'PM',
   appointmentsPerDay: '',
   counter: '',
+  additionalSchedules: [],
 }
 
 const hourOptions = Array.from({ length: 12 }, (_, index) => String(index + 1))
@@ -220,6 +221,7 @@ function AdminPage() {
       endPeriod: doctor.endTimeLabel?.split(' ')[1] || 'PM',
       appointmentsPerDay: doctor.appointmentsPerDay || '',
       counter: doctor.counter || '',
+      additionalSchedules: doctor.additionalSchedules || [],
     })
     setIsDoctorFormOpen(true)
   }
@@ -267,6 +269,14 @@ function AdminPage() {
         appointmentsPerDay,
         counter: doctorForm.counter ? doctorForm.counter.trim() : '',
         status: 'Consulting',
+        additionalSchedules: (doctorForm.additionalSchedules || []).map(sched => ({
+          startHour: sched.startHour, startMinute: sched.startMinute, startPeriod: sched.startPeriod,
+          endHour: sched.endHour, endMinute: sched.endMinute, endPeriod: sched.endPeriod,
+          startTime: to24HourTime(sched.startHour, sched.startMinute, sched.startPeriod),
+          endTime: to24HourTime(sched.endHour, sched.endMinute, sched.endPeriod),
+          startTimeLabel: `${sched.startHour}:${sched.startMinute} ${sched.startPeriod}`,
+          endTimeLabel: `${sched.endHour}:${sched.endMinute} ${sched.endPeriod}`,
+        }))
       }
 
       if (doctorForm.id) {
@@ -1211,16 +1221,76 @@ function DoctorManagement({
               />
             </label>
 
-            <label>
-              Ending time
-              <TimeSelectGroup
-                hour={doctorForm.endHour}
-                minute={doctorForm.endMinute}
-                period={doctorForm.endPeriod}
-                prefix="end"
-                onUpdateField={onUpdateField}
-              />
+            <label style={{ display: 'flex', flexDirection: 'column' }}>
+              <div style={{ display: 'flex', alignItems: 'flex-end', gap: '8px' }}>
+                <div style={{ flex: 1 }}>
+                  Ending time
+                  <TimeSelectGroup
+                    hour={doctorForm.endHour}
+                    minute={doctorForm.endMinute}
+                    period={doctorForm.endPeriod}
+                    prefix="end"
+                    onUpdateField={onUpdateField}
+                  />
+                </div>
+                <button 
+                  type="button" 
+                  onClick={() => onUpdateField('additionalSchedules', [...(doctorForm.additionalSchedules || []), { startHour: '5', startMinute: '00', startPeriod: 'PM', endHour: '8', endMinute: '00', endPeriod: 'PM' }])}
+                  style={{ height: '38px', padding: '0 12px', background: '#3b82f6', border: 'none', borderRadius: '4px', cursor: 'pointer', color: '#fff', fontSize: '18px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                >
+                  +
+                </button>
+              </div>
             </label>
+
+            {(doctorForm.additionalSchedules || []).map((sched, idx) => (
+              <div style={{ display: 'flex', gap: '16px', gridColumn: '1 / -1' }} key={idx}>
+                <label style={{ flex: 1 }}>
+                  Starting time {idx + 2}
+                  <TimeSelectGroup
+                    hour={sched.startHour}
+                    minute={sched.startMinute}
+                    period={sched.startPeriod}
+                    prefix="start"
+                    onUpdateField={(field, val) => {
+                      const newScheds = [...doctorForm.additionalSchedules]
+                      const key = field.replace('start', '').toLowerCase()
+                      newScheds[idx][key === 'hour' ? 'startHour' : key === 'minute' ? 'startMinute' : 'startPeriod'] = val
+                      onUpdateField('additionalSchedules', newScheds)
+                    }}
+                  />
+                </label>
+                <label style={{ flex: 1 }}>
+                  Ending time {idx + 2}
+                  <div style={{ display: 'flex', alignItems: 'flex-end', gap: '8px' }}>
+                    <div style={{ flex: 1 }}>
+                      <TimeSelectGroup
+                        hour={sched.endHour}
+                        minute={sched.endMinute}
+                        period={sched.endPeriod}
+                        prefix="end"
+                        onUpdateField={(field, val) => {
+                          const newScheds = [...doctorForm.additionalSchedules]
+                          const key = field.replace('end', '').toLowerCase()
+                          newScheds[idx][key === 'hour' ? 'endHour' : key === 'minute' ? 'endMinute' : 'endPeriod'] = val
+                          onUpdateField('additionalSchedules', newScheds)
+                        }}
+                      />
+                    </div>
+                    <button 
+                      type="button" 
+                      onClick={() => {
+                        const newScheds = doctorForm.additionalSchedules.filter((_, i) => i !== idx)
+                        onUpdateField('additionalSchedules', newScheds)
+                      }}
+                      style={{ height: '38px', padding: '0 12px', background: 'transparent', border: '1px solid #ef4444', borderRadius: '4px', cursor: 'pointer', color: '#ef4444', fontSize: '18px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                    >
+                      ×
+                    </button>
+                  </div>
+                </label>
+              </div>
+            ))}
 
             <label>
               No. of / day
