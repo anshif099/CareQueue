@@ -1804,7 +1804,14 @@ function RecordsPage({
                       </small>
                       <small>{appointment.slot || appointment.department}</small>
                     </span>
-                    <b>{status}</b>
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px' }}>
+                      <b style={{ color: '#16a34a', background: '#dcfce7', padding: '4px 12px', borderRadius: '16px', fontSize: '13px' }}>{status}</b>
+                      {appointment.labBillAmount !== undefined && (
+                        <span style={{ fontSize: '13px', fontWeight: '600', color: '#0f172a' }}>
+                          Bill: ₹{appointment.labBillAmount}
+                        </span>
+                      )}
+                    </div>
                   </button>
                 )
               })}
