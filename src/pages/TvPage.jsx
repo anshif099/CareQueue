@@ -261,12 +261,12 @@ function TvPage() {
           </section>
         </div>
 
-        <div className="tv-right-panel" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0, overflow: 'hidden' }}>
+        <div className="tv-right-panel">
           {tvAd?.url ? (
             tvAd.type === 'video' ? (
-              <video src={tvAd.url} autoPlay loop muted style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              <video src={tvAd.url} autoPlay loop muted playsInline />
             ) : (
-              <img src={tvAd.url} alt="Advertisement" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              <img src={tvAd.url} alt="Advertisement" />
             )
           ) : (
             <div style={{ color: '#334155', textAlign: 'center', display: 'flex', flexDirection: 'column', gap: '8px' }}>
