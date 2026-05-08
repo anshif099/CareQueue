@@ -326,8 +326,7 @@ function TvPage() {
                     width: '100%', 
                     height: '100%', 
                     border: 'none',
-                    transform: 'scale(1.1)', // Slight scale to hide YouTube edges if needed
-                    objectFit: 'cover'
+                    objectFit: 'fill'
                   }}
                 />
               ) : (
@@ -338,7 +337,7 @@ function TvPage() {
                   loop 
                   muted 
                   playsInline 
-                  style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                  style={{ width: '100%', height: '100%', objectFit: 'fill' }}
                 />
               )
             ) : (
