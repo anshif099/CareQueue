@@ -42,7 +42,8 @@ export default async function handler(request, response) {
   }
 
   try {
-    const sourceResponse = await fetch(GOOGLE_NEWS_RSS_URL, {
+    const rssUrl = `${GOOGLE_NEWS_RSS_URL}&_t=${Math.floor(Date.now() / 60000)}`
+    const sourceResponse = await fetch(rssUrl, {
       headers: {
         Accept: 'application/rss+xml, application/xml, text/xml',
         'User-Agent': 'CareQueue-TV/1.0',
@@ -54,7 +55,7 @@ export default async function handler(request, response) {
     }
 
     const headlines = extractHeadlinesFromRss(await sourceResponse.text())
-    response.setHeader('Cache-Control', 'public, s-maxage=90, stale-while-revalidate=120')
+    response.setHeader('Cache-Control', 'public, s-maxage=60, stale-while-revalidate=60')
     response.status(200).json({
       headlines,
       source: 'Google News Malayalam',

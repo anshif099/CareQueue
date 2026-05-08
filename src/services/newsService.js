@@ -1,4 +1,6 @@
 const GOOGLE_NEWS_RSS_URL = 'https://news.google.com/rss/search?q=Kerala&hl=ml&gl=IN&ceid=IN:ml'
+const CACHE_KEY = 'carequeue-news-v2'
+const CACHE_MAX_AGE_MS = 5 * 60 * 1000
 
 function decodeHtmlEntities(value) {
   const textArea = document.createElement('textarea')
@@ -13,17 +15,41 @@ function cleanHeadline(value) {
     .trim()
 }
 
-async function fetchOfficialHeadlines() {
-  const response = await fetch('/api/news-headlines', {
+function readCache() {
+  try {
+    const raw = localStorage.getItem(CACHE_KEY)
+    if (!raw) return null
+    const parsed = JSON.parse(raw)
+    if (!parsed || !Array.isArray(parsed.headlines) || !parsed.savedAt) return null
+    // Only use cache if it's less than 5 minutes old
+    if (Date.now() - parsed.savedAt > CACHE_MAX_AGE_MS) return null
+    return parsed.headlines
+  } catch {
+    return null
+  }
+}
+
+function writeCache(headlines) {
+  try {
+    localStorage.setItem(CACHE_KEY, JSON.stringify({ headlines, savedAt: Date.now() }))
+    // Clean up old cache key from previous version
+    localStorage.removeItem('carequeue-live-news-headlines')
+  } catch { /* */ }
+}
+
+async function fetchFromApi() {
+  const response = await fetch('/api/news-headlines?t=' + Date.now(), {
     headers: { Accept: 'application/json' },
+    cache: 'no-store',
   })
 
   if (!response.ok) {
-    throw new Error('Unable to load latest news headlines.')
+    throw new Error(`API responded with ${response.status}`)
   }
 
   const data = await response.json()
-  return Array.isArray(data.headlines) ? data.headlines.map(cleanHeadline).filter(Boolean) : []
+  if (!Array.isArray(data.headlines)) throw new Error('Invalid API response')
+  return data.headlines.map(cleanHeadline).filter(Boolean)
 }
 
 function extractHeadlinesFromRss(xml) {
@@ -38,48 +64,49 @@ function extractHeadlinesFromRss(xml) {
   return Array.from(new Set(headlines)).slice(0, 20)
 }
 
-async function fetchRssDirectly() {
+async function fetchFromRssDirect() {
   const response = await fetch(GOOGLE_NEWS_RSS_URL, {
     headers: { Accept: 'application/rss+xml, application/xml, text/xml' },
+    cache: 'no-store',
   })
 
   if (!response.ok) {
-    throw new Error('Unable to load Google News RSS.')
+    throw new Error(`RSS responded with ${response.status}`)
   }
 
   return extractHeadlinesFromRss(await response.text())
 }
 
 async function fetchLiveMalayalamHeadlines() {
-  let cachedHeadlines
-
+  // 1. Try our server-side API first (bypasses CORS, most reliable)
   try {
-    cachedHeadlines = JSON.parse(localStorage.getItem('carequeue-live-news-headlines') || '[]')
-  } catch {
-    cachedHeadlines = []
-  }
-
-  try {
-    const headlines = await fetchOfficialHeadlines()
+    const headlines = await fetchFromApi()
     if (headlines.length > 0) {
-      localStorage.setItem('carequeue-live-news-headlines', JSON.stringify(headlines))
+      writeCache(headlines)
       return headlines
     }
   } catch {
-    // Continue to direct RSS fetch fallback.
+    // API unavailable, try fallbacks
   }
 
+  // 2. Try fetching RSS directly in browser (may be CORS blocked)
   try {
-    const headlines = await fetchRssDirectly()
+    const headlines = await fetchFromRssDirect()
     if (headlines.length > 0) {
-      localStorage.setItem('carequeue-live-news-headlines', JSON.stringify(headlines))
+      writeCache(headlines)
       return headlines
     }
   } catch {
-    // Browser CORS may block direct RSS reads; fall back to cached headlines.
+    // CORS blocked or network error
   }
 
-  return cachedHeadlines
+  // 3. Last resort: use cache only if it's recent (< 5 min old)
+  const cached = readCache()
+  if (cached && cached.length > 0) {
+    return cached
+  }
+
+  return []
 }
 
 export {
