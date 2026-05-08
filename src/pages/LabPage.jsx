@@ -9,6 +9,54 @@ function mapAppointments(snapshot) {
   return Object.entries(appointments).map(([id, appointment]) => ({ id, ...appointment }))
 }
 
+function isPrescriptionMedicineLine(line) {
+  const trimmedLine = line.trim()
+  if (!trimmedLine) return false
+  if (/^\*\*.+\*\*$/.test(trimmedLine)) return false
+
+  const normalizedLine = trimmedLine
+    .replace(/^\d+[.)]\s*/, '')
+    .replace(/^[-*\u2022]\s*/, '')
+    .replace(/\*\*/g, '')
+    .trim()
+  const lowerLine = normalizedLine.toLowerCase()
+  const metadataLabels = [
+    'age:',
+    'date:',
+    'diagnosis:',
+    'dr.',
+    'dr:',
+    'doctor:',
+    'medicines:',
+    'medicine:',
+    'patient name:',
+    'prescription:',
+  ]
+  const instructionWords = [
+    'advised',
+    'avoid',
+    'consult',
+    'diet',
+    'drink',
+    'rest',
+    'review',
+    'steam',
+  ]
+
+  if (metadataLabels.some((label) => lowerLine.startsWith(label))) return false
+  if (lowerLine.includes('consultation')) return false
+
+  const hasMedicineForm = /\b(tab|tablet|cap|capsule|syrup|inj|injection|drop|drops|cream|ointment|gel|spray|sachet|solution|suspension|lotion)\b/i.test(normalizedLine)
+  const hasDosageUnit = /\b\d+(\.\d+)?\s*(mg|mcg|g|ml|iu|units?|%)\b/i.test(normalizedLine)
+  const hasListMarker = /^(\d+[.)]|[-*\u2022])\s+/.test(trimmedLine)
+  const hasDoseSchedule = /\b(od|bd|tds|qid|hs|stat|sos|daily|once|twice|morning|night|days?)\b/i.test(normalizedLine)
+  const isInstructionOnly = instructionWords.some((word) => lowerLine.includes(word))
+    && !hasMedicineForm
+    && !hasDosageUnit
+
+  return !isInstructionOnly && (hasMedicineForm || hasDosageUnit || (hasListMarker && hasDoseSchedule))
+}
+
 function LabPage() {
   const [appointments, setAppointments] = useState([])
   const [searchToken, setSearchToken] = useState('')
@@ -62,11 +110,22 @@ function LabPage() {
     return activePatient?.prescription ? activePatient.prescription.split('\n').filter(line => line.trim()) : []
   }, [activePatient])
 
+  const medicineLineIndexes = useMemo(() => {
+    return new Set(
+      prescriptionLines
+        .map((line, index) => (isPrescriptionMedicineLine(line) ? index : null))
+        .filter((index) => index !== null),
+    )
+  }, [prescriptionLines])
+
   const totalBill = useMemo(() => {
-    const prescTotal = Object.values(itemAmounts).reduce((sum, val) => sum + (Number(val) || 0), 0)
+    const prescTotal = Object.entries(itemAmounts).reduce((sum, [index, val]) => {
+      if (!medicineLineIndexes.has(Number(index))) return sum
+      return sum + (Number(val) || 0)
+    }, 0)
     const customTotal = customItems.reduce((sum, item) => sum + (Number(item.amount) || 0), 0)
     return prescTotal + customTotal
-  }, [itemAmounts, customItems])
+  }, [itemAmounts, customItems, medicineLineIndexes])
 
   const handleAmountChange = (index, value) => {
     setItemAmounts(prev => ({
@@ -142,9 +201,7 @@ function LabPage() {
               <h3>Prescription Details & Billing</h3>
               <div className="lab-prescription-list">
                 {prescriptionLines.length > 0 ? prescriptionLines.map((line, i) => {
-                  const lower = line.toLowerCase()
-                  const isInstruction = lower.includes('advised') || lower.includes('avoid') || lower.includes('drink') || lower.includes('rest') || lower.includes('review') || lower.includes('steam') || lower.includes('diet') || lower.includes('consult')
-                  const isMedicine = (line.trim().startsWith('•') || line.trim().startsWith('-') || line.trim().startsWith('*') || /^\d+\./.test(line.trim())) && !isInstruction
+                  const isMedicine = medicineLineIndexes.has(i)
                   return (
                   <div className="lab-presc-item" key={i}>
                     <span className="lab-presc-text" style={{ color: isMedicine ? '#fff' : '#a3a3a3' }}>{line}</span>
