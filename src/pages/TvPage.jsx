@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import { onValue, ref as databaseRef } from 'firebase/database'
 import { database } from '../lib/firebase.jsx'
+import NewsTickerWidget from '../components/NewsTickerWidget.jsx'
 import '../components/TvDashboard.css'
+import YoutubeLivePlayer from '../components/YoutubeLivePlayer.jsx'
 
 const doctorSessionKey = 'carequeue-doctor-id'
 
@@ -62,6 +64,42 @@ function getDoctorCounter(doctor) {
   return 'Counter 1'
 }
 
+function useTvDisplayMode() {
+  useEffect(() => {
+    let wakeLock = null
+
+    async function enableDisplayMode() {
+      try {
+        if ('wakeLock' in navigator) {
+          wakeLock = await navigator.wakeLock.request('screen')
+        }
+      } catch {
+        wakeLock = null
+      }
+
+      try {
+        await screen.orientation?.lock?.('landscape')
+      } catch {
+        // Orientation locking is best-effort and may require installed PWA/fullscreen mode.
+      }
+    }
+
+    function handleVisibilityChange() {
+      if (document.visibilityState === 'visible') {
+        enableDisplayMode()
+      }
+    }
+
+    enableDisplayMode()
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+      wakeLock?.release?.()
+    }
+  }, [])
+}
+
 function TvPage() {
   const [doctors, setDoctors] = useState([])
   const [appointments, setAppointments] = useState([])
@@ -71,7 +109,8 @@ function TvPage() {
   const [dataError, setDataError] = useState('')
   const [isDoctorsLoading, setIsDoctorsLoading] = useState(true)
   const [currentTime, setCurrentTime] = useState(getDeviceTime())
-  const [tvAd, setTvAd] = useState(null)
+
+  useTvDisplayMode()
 
   useEffect(() => {
     const timer = window.setInterval(() => {
@@ -99,13 +138,6 @@ function TvPage() {
   useEffect(() => {
     const unsubscribe = onValue(databaseRef(database, 'appointments'), (snapshot) => {
       setAppointments(mapAppointments(snapshot))
-    })
-    return unsubscribe
-  }, [])
-
-  useEffect(() => {
-    const unsubscribe = onValue(databaseRef(database, 'settings/tvAd'), (snapshot) => {
-      setTvAd(snapshot.val())
     })
     return unsubscribe
   }, [])
@@ -148,7 +180,6 @@ function TvPage() {
   }, [mainDoctorQueue])
 
   const mainCurrentPatient = mainInConsult || mainDoctorQueue[0] || null
-  const mainUpcomingQueue = mainDoctorQueue.filter(app => app.id !== mainCurrentPatient?.id)
 
   const activeCounters = useMemo(() => {
     return doctors.filter(d => (d.status ?? 'Consulting') === 'Consulting' || d.servingToken).map(d => {
@@ -164,17 +195,6 @@ function TvPage() {
         status: d.status || 'Consulting'
       }
     })
-  }, [doctors, allActiveAppointments])
-
-  const departmentStats = useMemo(() => {
-    const deps = {}
-    doctors.forEach(d => {
-      if (!d.department) return
-      if (!deps[d.department]) deps[d.department] = { waiting: 0, avgWait: 15 }
-      const dQueue = allActiveAppointments.filter(app => app.doctorId === d.id)
-      deps[d.department].waiting += dQueue.length
-    })
-    return Object.entries(deps).map(([name, stats]) => ({ name, ...stats }))
   }, [doctors, allActiveAppointments])
 
   if (!doctorId || (!mainDoctor && !isDoctorsLoading)) {
@@ -219,7 +239,7 @@ function TvPage() {
           </div>
         </div>
         <div className="tv-header-right">
-          <div className="tv-live-badge"><span className="tv-dot"></span> Live</div>
+          <div className="tv-live-badge"><span className="tv-dot"></span> LIVE</div>
           <div className="tv-time">
             {currentTime.time} <span>{currentTime.period}</span>
           </div>
@@ -262,29 +282,11 @@ function TvPage() {
         </div>
 
         <div className="tv-right-panel">
-          {tvAd?.url ? (
-            tvAd.type === 'video' ? (
-              <video src={tvAd.url} autoPlay loop muted playsInline />
-            ) : (
-              <img src={tvAd.url} alt="Advertisement" />
-            )
-          ) : (
-            <div style={{ color: '#334155', textAlign: 'center', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-               <h2 style={{ fontSize: '32px', margin: 0 }}>Ad Space</h2>
-               <p style={{ fontSize: '16px', margin: 0 }}>Configure in Super Admin panel (Publishing)</p>
-            </div>
-          )}
+          <YoutubeLivePlayer />
         </div>
       </div>
 
-      <footer className="tv-ticker">
-        <div className="tv-ticker-content">
-          {activeCounters.map(c => (
-            <span key={c.id}>{c.department} — now serving {c.token} · {c.counter} &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span>
-          ))}
-          <span>Please keep your previous prescriptions and reports ready.</span>
-        </div>
-      </footer>
+      <NewsTickerWidget />
     </main>
   )
 }
