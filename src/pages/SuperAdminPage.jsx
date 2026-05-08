@@ -23,6 +23,22 @@ function readFileAsDataUrl(file) {
   })
 }
 
+function extractYouTubeVideoId(url) {
+  try {
+    const parsedUrl = new URL(url)
+    if (parsedUrl.hostname.includes('youtu.be')) {
+      return parsedUrl.pathname.replace('/', '')
+    }
+    if (parsedUrl.searchParams.has('v')) {
+      return parsedUrl.searchParams.get('v')
+    }
+    const embedMatch = parsedUrl.pathname.match(/\/(embed|live)\/([^/?]+)/)
+    return embedMatch?.[2] || ''
+  } catch {
+    return ''
+  }
+}
+
 function loadImageFromObjectUrl(url) {
   return new Promise((resolve, reject) => {
     const image = new Image()
@@ -291,9 +307,15 @@ function SuperAdminPage() {
     setAdType(nextType)
     setAdError('')
 
-    if (nextType === 'video' && adUrl.startsWith('data:image/')) {
-      setAdUrl('')
-      setAdFileName('')
+    // Clear Base64 if switching types to avoid mismatch (e.g. video tag trying to play image base64)
+    if (adUrl.startsWith('data:')) {
+      const isUrlForImage = adUrl.startsWith('data:image/')
+      const isUrlForVideo = adUrl.startsWith('data:video/')
+      
+      if ((nextType === 'video' && !isUrlForVideo) || (nextType === 'image' && !isUrlForImage)) {
+        setAdUrl('')
+        setAdFileName('')
+      }
     }
   }
 
@@ -311,12 +333,24 @@ function SuperAdminPage() {
     setAdError('')
 
     try {
-      const processedImage = await processAdImageFile(file)
-      setAdType('image')
-      setAdUrl(processedImage.dataUrl)
-      setAdFileName(processedImage.name)
+      if (adType === 'video') {
+        if (!file.type.startsWith('video/')) {
+          throw new Error('Please choose a video file.')
+        }
+        // 25MB limit for video Base64 in Realtime Database (generous but risky)
+        if (file.size > 25 * 1024 * 1024) {
+          throw new Error('Please choose a video smaller than 25 MB.')
+        }
+        const dataUrl = await readFileAsDataUrl(file)
+        setAdUrl(dataUrl)
+        setAdFileName(file.name)
+      } else {
+        const processedImage = await processAdImageFile(file)
+        setAdUrl(processedImage.dataUrl)
+        setAdFileName(processedImage.name)
+      }
     } catch (err) {
-      setAdError(err.message || 'Failed to process the selected image.')
+      setAdError(err.message || 'Failed to process the selected file.')
     } finally {
       setIsProcessingAdFile(false)
       e.target.value = ''
@@ -526,32 +560,30 @@ function SuperAdminPage() {
                   />
                 </div>
 
-                {adType === 'image' && (
-                  <div className="sa-form-group" style={{ margin: 0 }}>
-                    <label>Upload Image File</label>
-                    <input
-                      accept="image/*"
+                <div className="sa-form-group" style={{ margin: 0 }}>
+                  <label>{adType === 'video' ? 'Upload Video File' : 'Upload Image File'}</label>
+                  <input
+                    accept={adType === 'video' ? 'video/*' : 'image/*'}
+                    disabled={isProcessingAdFile || isSavingAd}
+                    onChange={handleAdFileChange}
+                    type="file"
+                  />
+                  {adFileName && <p style={{ fontSize: '12px', color: '#94a3b8' }}>Selected file: {adFileName}</p>}
+                  {adUrl.startsWith('data:') && (
+                    <button
+                      className="sa-action-btn"
                       disabled={isProcessingAdFile || isSavingAd}
-                      onChange={handleAdFileChange}
-                      type="file"
-                    />
-                    {adFileName && <p style={{ fontSize: '12px', color: '#94a3b8' }}>Selected file: {adFileName}</p>}
-                    {isBase64AdImage && (
-                      <button
-                        className="sa-action-btn"
-                        disabled={isProcessingAdFile || isSavingAd}
-                        onClick={() => {
-                          setAdUrl('')
-                          setAdFileName('')
-                          setAdError('')
-                        }}
-                        type="button"
-                      >
-                        Use Image URL Instead
-                      </button>
-                    )}
-                  </div>
-                )}
+                      onClick={() => {
+                        setAdUrl('')
+                        setAdFileName('')
+                        setAdError('')
+                      }}
+                      type="button"
+                    >
+                      Use {adType === 'video' ? 'Video' : 'Image'} URL Instead
+                    </button>
+                  )}
+                </div>
 
                 {adError && <p className="sa-login-error">{adError}</p>}
 
@@ -559,7 +591,16 @@ function SuperAdminPage() {
                   <div style={{ marginTop: '8px', border: '1px dashed #334155', borderRadius: '8px', padding: '8px', background: '#020617' }}>
                     <p style={{ marginBottom: '8px', fontSize: '12px', color: '#94a3b8' }}>Preview:</p>
                     {adType === 'video' ? (
-                      <video src={adUrl} controls style={{ width: '100%', maxHeight: '200px', objectFit: 'contain' }} />
+                      extractYouTubeVideoId(adUrl) ? (
+                        <div style={{ position: 'relative', paddingBottom: '56.25%', height: 0, overflow: 'hidden', borderRadius: '4px' }}>
+                          <iframe
+                            src={`https://www.youtube.com/embed/${extractYouTubeVideoId(adUrl)}?controls=0`}
+                            style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', border: 'none' }}
+                          />
+                        </div>
+                      ) : (
+                        <video key={adUrl} src={adUrl} controls style={{ width: '100%', maxHeight: '200px', objectFit: 'contain' }} />
+                      )
                     ) : (
                       <img src={adUrl} alt="Ad preview" style={{ width: '100%', maxHeight: '200px', objectFit: 'contain' }} />
                     )}

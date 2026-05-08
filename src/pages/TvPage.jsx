@@ -57,6 +57,22 @@ function compareAppointments(firstAppointment, secondAppointment) {
   return (Number(firstAppointment.createdAt) || 0) - (Number(secondAppointment.createdAt) || 0)
 }
 
+function extractYouTubeVideoId(url) {
+  try {
+    const parsedUrl = new URL(url)
+    if (parsedUrl.hostname.includes('youtu.be')) {
+      return parsedUrl.pathname.replace('/', '')
+    }
+    if (parsedUrl.searchParams.has('v')) {
+      return parsedUrl.searchParams.get('v')
+    }
+    const embedMatch = parsedUrl.pathname.match(/\/(embed|live)\/([^/?]+)/)
+    return embedMatch?.[2] || ''
+  } catch {
+    return ''
+  }
+}
+
 function getDoctorCounter(doctor) {
   if (doctor?.counter) return doctor.counter
   if (doctor?.counterName) return doctor.counterName
@@ -188,6 +204,13 @@ function TvPage() {
 
   const mainCurrentPatient = mainInConsult || mainDoctorQueue[0] || null
 
+  const adYouTubeId = useMemo(() => {
+    if (tvAd?.type === 'video' && tvAd?.url) {
+      return extractYouTubeVideoId(tvAd.url)
+    }
+    return ''
+  }, [tvAd])
+
   const activeCounters = useMemo(() => {
     return doctors.filter(d => (d.status ?? 'Consulting') === 'Consulting' || d.servingToken).map(d => {
       const dQueue = allActiveAppointments.filter(app => app.doctorId === d.id)
@@ -291,7 +314,23 @@ function TvPage() {
         <div className="tv-right-panel">
           {tvAd?.url ? (
             tvAd.type === 'video' ? (
-              <video src={tvAd.url} autoPlay loop muted playsInline />
+              adYouTubeId ? (
+                <iframe
+                  src={`https://www.youtube.com/embed/${adYouTubeId}?autoplay=1&mute=1&loop=1&playlist=${adYouTubeId}&controls=0&modestbranding=1`}
+                  allow="autoplay; encrypted-media"
+                  style={{ width: '100%', height: '100%', border: 'none' }}
+                />
+              ) : (
+                <video 
+                  key={tvAd.url}
+                  src={tvAd.url} 
+                  autoPlay 
+                  loop 
+                  muted 
+                  playsInline 
+                  style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                />
+              )
             ) : (
               <img src={tvAd.url} alt="Advertisement" />
             )
