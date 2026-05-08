@@ -3,7 +3,6 @@ import { onValue, ref as databaseRef } from 'firebase/database'
 import { database } from '../lib/firebase.jsx'
 import NewsTickerWidget from '../components/NewsTickerWidget.jsx'
 import '../components/TvDashboard.css'
-import YoutubeLivePlayer from '../components/YoutubeLivePlayer.jsx'
 
 const doctorSessionKey = 'carequeue-doctor-id'
 
@@ -109,6 +108,7 @@ function TvPage() {
   const [dataError, setDataError] = useState('')
   const [isDoctorsLoading, setIsDoctorsLoading] = useState(true)
   const [currentTime, setCurrentTime] = useState(getDeviceTime())
+  const [tvAd, setTvAd] = useState(null)
 
   useTvDisplayMode()
 
@@ -138,6 +138,13 @@ function TvPage() {
   useEffect(() => {
     const unsubscribe = onValue(databaseRef(database, 'appointments'), (snapshot) => {
       setAppointments(mapAppointments(snapshot))
+    })
+    return unsubscribe
+  }, [])
+
+  useEffect(() => {
+    const unsubscribe = onValue(databaseRef(database, 'settings/tvAd'), (snapshot) => {
+      setTvAd(snapshot.val())
     })
     return unsubscribe
   }, [])
@@ -282,7 +289,18 @@ function TvPage() {
         </div>
 
         <div className="tv-right-panel">
-          <YoutubeLivePlayer />
+          {tvAd?.url ? (
+            tvAd.type === 'video' ? (
+              <video src={tvAd.url} autoPlay loop muted playsInline />
+            ) : (
+              <img src={tvAd.url} alt="Advertisement" />
+            )
+          ) : (
+            <div className="tv-ad-empty">
+              <h2>Ad Space</h2>
+              <p>Configure in Super Admin panel</p>
+            </div>
+          )}
         </div>
       </div>
 

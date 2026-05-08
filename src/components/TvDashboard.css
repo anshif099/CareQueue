@@ -241,6 +241,24 @@
   display: block;
 }
 
+.tv-ad-empty {
+  color: #334155;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.tv-ad-empty h2 {
+  font-size: 32px;
+  margin: 0;
+}
+
+.tv-ad-empty p {
+  font-size: 16px;
+  margin: 0;
+}
+
 .tv-news-player {
   width: 100%;
   height: 100%;
