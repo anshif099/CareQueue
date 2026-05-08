@@ -635,6 +635,7 @@
   display: flex;
   align-items: center;
   position: relative;
+  padding: 0 28px;
 }
 
 .tv-ticker-track::before,
@@ -643,7 +644,7 @@
   position: absolute;
   top: 0;
   bottom: 0;
-  width: 96px;
+  width: 64px;
   pointer-events: none;
   z-index: 1;
 }
@@ -658,32 +659,72 @@
   background: linear-gradient(270deg, rgba(15, 23, 42, 0.95), transparent);
 }
 
-.tv-ticker-content {
+.tv-ticker-headline {
   display: flex;
   align-items: center;
-  width: max-content;
-  min-width: 100%;
-  animation: ticker 44s linear infinite;
+  gap: 16px;
+  width: 100%;
   font-family: "Noto Sans Malayalam", "Nirmala UI", "Kartika", system-ui, sans-serif;
-  font-size: 27px;
+  font-size: 26px;
   color: #fff;
   font-weight: 900;
-  will-change: transform;
-  transform: translate3d(0, 0, 0);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  will-change: transform, opacity;
 }
 
-.tv-ticker-content span {
+.tv-ticker-headline span {
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.42);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tv-ticker-headline--in {
+  animation: tickerSlideIn 0.5s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.tv-ticker-headline--out {
+  animation: tickerSlideOut 0.5s cubic-bezier(0.55, 0, 1, 0.45) forwards;
+}
+
+.tv-ticker-num {
+  flex-shrink: 0;
   display: inline-flex;
   align-items: center;
-  margin-right: 72px;
-  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.42);
+  justify-content: center;
+  min-width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  color: #fecaca;
+  font-size: 16px;
+  font-weight: 900;
+  font-style: normal;
+  letter-spacing: 0.5px;
 }
 
-.tv-ticker-content span::before {
-  content: '•';
-  color: #fecaca;
-  margin-right: 28px;
-  font-size: 24px;
+@keyframes tickerSlideIn {
+  0% {
+    transform: translateX(60px);
+    opacity: 0;
+  }
+  100% {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes tickerSlideOut {
+  0% {
+    transform: translateX(0);
+    opacity: 1;
+  }
+  100% {
+    transform: translateX(-60px);
+    opacity: 0;
+  }
 }
 
 .tv-ticker-time {
@@ -697,10 +738,6 @@
   letter-spacing: 1.2px;
 }
 
-@keyframes ticker {
-  0% { transform: translate3d(0, 0, 0); }
-  100% { transform: translate3d(-50%, 0, 0); }
-}
 
 @media (max-width: 900px) {
   .tv-console {
@@ -742,7 +779,11 @@
     padding: 0 14px;
   }
 
-  .tv-ticker-content {
+  .tv-ticker-headline {
     font-size: 21px;
+  }
+
+  .tv-ticker-track {
+    padding: 0 14px;
   }
 }
