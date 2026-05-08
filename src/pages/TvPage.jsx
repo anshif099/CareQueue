@@ -59,6 +59,7 @@ function compareAppointments(firstAppointment, secondAppointment) {
 
 function extractYouTubeVideoId(url) {
   try {
+    if (!url) return ''
     const parsedUrl = new URL(url)
     if (parsedUrl.hostname.includes('youtu.be')) {
       return parsedUrl.pathname.replace('/', '')
@@ -66,8 +67,11 @@ function extractYouTubeVideoId(url) {
     if (parsedUrl.searchParams.has('v')) {
       return parsedUrl.searchParams.get('v')
     }
-    const embedMatch = parsedUrl.pathname.match(/\/(embed|live)\/([^/?]+)/)
-    return embedMatch?.[2] || ''
+    const pathMatch = parsedUrl.pathname.match(/\/(embed|live|shorts)\/([^/?]+)/)
+    if (pathMatch) {
+      return pathMatch[2]
+    }
+    return ''
   } catch {
     return ''
   }
