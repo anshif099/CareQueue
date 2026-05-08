@@ -31,17 +31,17 @@ function NewsTickerWidget() {
 
   const tickerItems = useMemo(() => {
     if (headlines.length === 0) {
-      return ['24 News Malayalam ലൈവ് വാര്‍ത്തകള്‍ ലോഡ് ചെയ്യുന്നു']
+      return ['ലൈവ് വാര്‍ത്തകള്‍ ലോഡ് ചെയ്യുന്നു...']
     }
 
     return headlines
   }, [headlines])
 
   return (
-    <footer className="tv-ticker" aria-label="24 News Malayalam live headlines">
+    <footer className="tv-ticker" aria-label="Live Malayalam news headlines">
       <div className="tv-ticker-label">
         <span>BREAKING</span>
-        <strong>24 NEWS</strong>
+        <strong>LIVE NEWS</strong>
       </div>
       <div className="tv-ticker-track">
         <div className="tv-ticker-content">

@@ -1,5 +1,22 @@
 import { useEffect, useMemo, useState } from 'react'
-import { YOUTUBE_LIVE_URL, extractYouTubeVideoId } from '../services/newsService.js'
+
+const YOUTUBE_LIVE_URL = 'https://www.youtube.com/watch?v=1wECsnGZcfc'
+
+function extractYouTubeVideoId(url) {
+  try {
+    const parsedUrl = new URL(url)
+    if (parsedUrl.hostname.includes('youtu.be')) {
+      return parsedUrl.pathname.replace('/', '')
+    }
+    if (parsedUrl.searchParams.has('v')) {
+      return parsedUrl.searchParams.get('v')
+    }
+    const embedMatch = parsedUrl.pathname.match(/\/(embed|live)\/([^/?]+)/)
+    return embedMatch?.[2] || ''
+  } catch {
+    return ''
+  }
+}
 
 function YoutubeLivePlayer({ streamUrl = YOUTUBE_LIVE_URL }) {
   const [playerKey, setPlayerKey] = useState(0)

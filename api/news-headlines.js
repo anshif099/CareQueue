@@ -1,7 +1,8 @@
-const SOURCE_URL = 'https://www.twentyfournews.com/live'
+const GOOGLE_NEWS_RSS_URL = 'https://news.google.com/rss/search?q=Kerala&hl=ml&gl=IN&ceid=IN:ml'
 
-function decodeHtmlEntities(value) {
+function cleanHeadline(value) {
   return value
+    .replace(/<[^>]+>/g, ' ')
     .replace(/&#(\d+);/g, (_, code) => String.fromCharCode(Number(code)))
     .replace(/&#x([\da-f]+);/gi, (_, code) => String.fromCharCode(parseInt(code, 16)))
     .replace(/&amp;/g, '&')
@@ -10,31 +11,19 @@ function decodeHtmlEntities(value) {
     .replace(/&nbsp;/g, ' ')
     .replace(/&lt;/g, '<')
     .replace(/&gt;/g, '>')
-}
-
-function stripTags(value) {
-  return value
-    .replace(/<script[\s\S]*?<\/script>/gi, '')
-    .replace(/<style[\s\S]*?<\/style>/gi, '')
-    .replace(/<[^>]+>/g, ' ')
-}
-
-function cleanHeadline(value) {
-  return decodeHtmlEntities(stripTags(value))
     .replace(/\s+/g, ' ')
+    .replace(/\s*[-–|]\s*[A-Za-z].*$/g, '')
     .trim()
 }
 
-function extractHeadlines(html) {
-  const latestIndex = html.toLowerCase().indexOf('latest news')
-  const latestSection = latestIndex >= 0 ? html.slice(latestIndex, latestIndex + 30000) : html
-  const anchorMatches = Array.from(latestSection.matchAll(/<a\b[^>]*>([\s\S]*?)<\/a>/gi))
-  const headlines = anchorMatches
+function extractHeadlinesFromRss(xml) {
+  const titleMatches = Array.from(xml.matchAll(/<item>[\s\S]*?<title>([\s\S]*?)<\/title>[\s\S]*?<\/item>/gi))
+  const headlines = titleMatches
     .map((match) => cleanHeadline(match[1]))
     .filter((headline) => /[\u0D00-\u0D7F]/.test(headline))
-    .filter((headline) => headline.length > 18)
+    .filter((headline) => headline.length > 12)
 
-  return Array.from(new Set(headlines)).slice(0, 16)
+  return Array.from(new Set(headlines)).slice(0, 20)
 }
 
 export default async function handler(request, response) {
@@ -53,29 +42,29 @@ export default async function handler(request, response) {
   }
 
   try {
-    const sourceResponse = await fetch(SOURCE_URL, {
+    const sourceResponse = await fetch(GOOGLE_NEWS_RSS_URL, {
       headers: {
-        Accept: 'text/html,application/xhtml+xml',
-        'User-Agent': 'CareQueue-TV/1.0 (+https://www.twentyfournews.com/live)',
+        Accept: 'application/rss+xml, application/xml, text/xml',
+        'User-Agent': 'CareQueue-TV/1.0',
       },
     })
 
     if (!sourceResponse.ok) {
-      throw new Error(`Twentyfour News responded with ${sourceResponse.status}`)
+      throw new Error(`Google News RSS responded with ${sourceResponse.status}`)
     }
 
-    const headlines = extractHeadlines(await sourceResponse.text())
+    const headlines = extractHeadlinesFromRss(await sourceResponse.text())
     response.setHeader('Cache-Control', 'public, s-maxage=90, stale-while-revalidate=120')
     response.status(200).json({
       headlines,
-      source: SOURCE_URL,
+      source: 'Google News Malayalam',
       updatedAt: new Date().toISOString(),
     })
   } catch (error) {
     response.status(502).json({
-      error: error.message || 'Unable to fetch 24 News headlines',
+      error: error.message || 'Unable to fetch news headlines',
       headlines: [],
-      source: SOURCE_URL,
+      source: GOOGLE_NEWS_RSS_URL,
     })
   }
 }
