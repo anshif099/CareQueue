@@ -663,7 +663,7 @@
   align-items: center;
   width: max-content;
   min-width: 100%;
-  animation: ticker 44s linear infinite;
+  animation: ticker 28s linear infinite;
   font-family: "Noto Sans Malayalam", "Nirmala UI", "Kartika", system-ui, sans-serif;
   font-size: 27px;
   color: #fff;

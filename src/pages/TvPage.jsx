@@ -92,8 +92,14 @@ function useTvDisplayMode() {
     enableDisplayMode()
     document.addEventListener('visibilitychange', handleVisibilityChange)
 
+    // Auto-refresh the entire page every 10 minutes for fresh data
+    const autoRefreshTimer = window.setInterval(() => {
+      window.location.reload()
+    }, 10 * 60 * 1000)
+
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange)
+      window.clearInterval(autoRefreshTimer)
       wakeLock?.release?.()
     }
   }, [])
