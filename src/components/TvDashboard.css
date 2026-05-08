@@ -662,7 +662,7 @@
   display: flex;
   align-items: center;
   width: max-content;
-  animation: ticker 18s linear forwards;
+  animation: ticker 35s linear forwards;
   font-family: "Noto Sans Malayalam", "Nirmala UI", "Kartika", system-ui, sans-serif;
   font-size: 27px;
   color: #fff;
