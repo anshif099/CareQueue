@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { onValue, push, update, ref as databaseRef, serverTimestamp } from 'firebase/database'
+import { onValue, push, remove, set, update, ref as databaseRef, serverTimestamp } from 'firebase/database'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import { database } from '../lib/firebase.jsx'
 import '../components/SuperAdminPage.css'
@@ -7,6 +7,81 @@ import '../components/SuperAdminPage.css'
 const SUPER_ADMIN = {
   username: 'superadmin',
   password: 'superadmin123'
+}
+
+const AD_IMAGE_MAX_WIDTH = 1600
+const AD_IMAGE_MAX_HEIGHT = 1300
+const AD_IMAGE_QUALITY = 0.88
+const DIRECT_IMAGE_MAX_BYTES = 4 * 1024 * 1024
+
+function readFileAsDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(reader.result)
+    reader.onerror = () => reject(reader.error || new Error('Unable to read selected image.'))
+    reader.readAsDataURL(file)
+  })
+}
+
+function loadImageFromObjectUrl(url) {
+  return new Promise((resolve, reject) => {
+    const image = new Image()
+    image.onload = () => resolve(image)
+    image.onerror = () => reject(new Error('Unable to process selected image.'))
+    image.src = url
+  })
+}
+
+async function processAdImageFile(file) {
+  if (!file.type.startsWith('image/')) {
+    throw new Error('Please choose an image file.')
+  }
+
+  if (['image/gif', 'image/svg+xml'].includes(file.type)) {
+    if (file.size > DIRECT_IMAGE_MAX_BYTES) {
+      throw new Error('Please choose a GIF or SVG smaller than 4 MB.')
+    }
+    return {
+      dataUrl: await readFileAsDataUrl(file),
+      height: null,
+      name: file.name,
+      width: null,
+    }
+  }
+
+  const objectUrl = URL.createObjectURL(file)
+
+  try {
+    const image = await loadImageFromObjectUrl(objectUrl)
+    const scale = Math.min(
+      1,
+      AD_IMAGE_MAX_WIDTH / image.naturalWidth,
+      AD_IMAGE_MAX_HEIGHT / image.naturalHeight,
+    )
+    const width = Math.max(1, Math.round(image.naturalWidth * scale))
+    const height = Math.max(1, Math.round(image.naturalHeight * scale))
+    const canvas = document.createElement('canvas')
+    const context = canvas.getContext('2d')
+
+    canvas.width = width
+    canvas.height = height
+    if (!context) {
+      throw new Error('Unable to prepare image preview.')
+    }
+
+    context.fillStyle = '#0b111a'
+    context.fillRect(0, 0, width, height)
+    context.drawImage(image, 0, 0, width, height)
+
+    return {
+      dataUrl: canvas.toDataURL('image/jpeg', AD_IMAGE_QUALITY),
+      height,
+      name: file.name,
+      width,
+    }
+  } finally {
+    URL.revokeObjectURL(objectUrl)
+  }
 }
 
 function SuperAdminPage() {
@@ -23,10 +98,14 @@ function SuperAdminPage() {
   
   const [adUrl, setAdUrl] = useState('')
   const [adType, setAdType] = useState('image')
+  const [adFileName, setAdFileName] = useState('')
+  const [adError, setAdError] = useState('')
+  const [isProcessingAdFile, setIsProcessingAdFile] = useState(false)
   const [isSavingAd, setIsSavingAd] = useState(false)
 
   const [doctors, setDoctors] = useState([])
   const [appointments, setAppointments] = useState([])
+  const isBase64AdImage = adType === 'image' && adUrl.startsWith('data:image/')
 
   const getTodayKey = () => {
     const d = new Date()
@@ -57,6 +136,11 @@ function SuperAdminPage() {
       if (data) {
         setAdUrl(data.url || '')
         setAdType(data.type || 'image')
+        setAdFileName(data.name || '')
+      } else {
+        setAdUrl('')
+        setAdType('image')
+        setAdFileName('')
       }
     })
 
@@ -172,14 +256,85 @@ function SuperAdminPage() {
 
   const handleSaveAd = async (e) => {
     e.preventDefault()
+    const nextAdUrl = adUrl.trim()
+
+    if (!nextAdUrl) {
+      setAdError('Upload an image or enter a media URL before publishing.')
+      return
+    }
+
     setIsSavingAd(true)
+    setAdError('')
     try {
-      await update(databaseRef(database, 'settings'), {
-        tvAd: { url: adUrl, type: adType }
-      })
+      const nextAd = {
+        source: isBase64AdImage ? 'base64' : 'url',
+        type: adType,
+        updatedAt: serverTimestamp(),
+        url: nextAdUrl,
+      }
+
+      if (adFileName) {
+        nextAd.name = adFileName
+      }
+
+      await set(databaseRef(database, 'settings/tvAd'), nextAd)
       alert('TV Advertisement updated successfully!')
     } catch (err) {
       alert('Failed to save ad: ' + err.message)
+    } finally {
+      setIsSavingAd(false)
+    }
+  }
+
+  const handleAdTypeChange = (e) => {
+    const nextType = e.target.value
+    setAdType(nextType)
+    setAdError('')
+
+    if (nextType === 'video' && adUrl.startsWith('data:image/')) {
+      setAdUrl('')
+      setAdFileName('')
+    }
+  }
+
+  const handleAdUrlChange = (e) => {
+    setAdUrl(e.target.value)
+    setAdFileName('')
+    setAdError('')
+  }
+
+  const handleAdFileChange = async (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    setIsProcessingAdFile(true)
+    setAdError('')
+
+    try {
+      const processedImage = await processAdImageFile(file)
+      setAdType('image')
+      setAdUrl(processedImage.dataUrl)
+      setAdFileName(processedImage.name)
+    } catch (err) {
+      setAdError(err.message || 'Failed to process the selected image.')
+    } finally {
+      setIsProcessingAdFile(false)
+      e.target.value = ''
+    }
+  }
+
+  const handleRemoveAd = async () => {
+    setIsSavingAd(true)
+    setAdError('')
+
+    try {
+      await remove(databaseRef(database, 'settings/tvAd'))
+      setAdUrl('')
+      setAdType('image')
+      setAdFileName('')
+      alert('TV Advertisement removed successfully!')
+    } catch (err) {
+      alert('Failed to remove ad: ' + err.message)
     } finally {
       setIsSavingAd(false)
     }
@@ -351,7 +506,7 @@ function SuperAdminPage() {
                   <label>Media Type</label>
                   <select 
                     value={adType} 
-                    onChange={e => setAdType(e.target.value)}
+                    onChange={handleAdTypeChange}
                     style={{ background: '#1e293b', border: '1px solid #334155', color: '#f8fafc', padding: '12px', borderRadius: '6px', fontSize: '15px', outline: 'none' }}
                   >
                     <option value="image">Image (JPG, PNG, GIF)</option>
@@ -362,13 +517,43 @@ function SuperAdminPage() {
                 <div className="sa-form-group" style={{ margin: 0 }}>
                   <label>Media URL (Image or Video Link)</label>
                   <input 
-                    required
-                    type="url"
-                    value={adUrl} 
-                    onChange={e => setAdUrl(e.target.value)}
-                    placeholder="https://example.com/ad.jpg"
+                    disabled={isBase64AdImage || isProcessingAdFile || isSavingAd}
+                    required={!isBase64AdImage}
+                    type="text"
+                    value={isBase64AdImage ? '' : adUrl}
+                    onChange={handleAdUrlChange}
+                    placeholder={isBase64AdImage ? 'Uploaded image ready to publish' : 'https://example.com/ad.jpg'}
                   />
                 </div>
+
+                {adType === 'image' && (
+                  <div className="sa-form-group" style={{ margin: 0 }}>
+                    <label>Upload Image File</label>
+                    <input
+                      accept="image/*"
+                      disabled={isProcessingAdFile || isSavingAd}
+                      onChange={handleAdFileChange}
+                      type="file"
+                    />
+                    {adFileName && <p style={{ fontSize: '12px', color: '#94a3b8' }}>Selected file: {adFileName}</p>}
+                    {isBase64AdImage && (
+                      <button
+                        className="sa-action-btn"
+                        disabled={isProcessingAdFile || isSavingAd}
+                        onClick={() => {
+                          setAdUrl('')
+                          setAdFileName('')
+                          setAdError('')
+                        }}
+                        type="button"
+                      >
+                        Use Image URL Instead
+                      </button>
+                    )}
+                  </div>
+                )}
+
+                {adError && <p className="sa-login-error">{adError}</p>}
 
                 {adUrl && (
                   <div style={{ marginTop: '8px', border: '1px dashed #334155', borderRadius: '8px', padding: '8px', background: '#020617' }}>
@@ -381,9 +566,19 @@ function SuperAdminPage() {
                   </div>
                 )}
                 
-                <button type="submit" className="sa-submit-btn" disabled={isSavingAd}>
-                  {isSavingAd ? 'Saving...' : 'Publish to TV Screens'}
+                <button type="submit" className="sa-submit-btn" disabled={isSavingAd || isProcessingAdFile}>
+                  {isProcessingAdFile ? 'Processing image...' : isSavingAd ? 'Saving...' : 'Publish to TV Screens'}
                 </button>
+                {adUrl && (
+                  <button
+                    className="sa-action-btn"
+                    disabled={isSavingAd || isProcessingAdFile}
+                    onClick={handleRemoveAd}
+                    type="button"
+                  >
+                    Remove Current Advertisement
+                  </button>
+                )}
               </form>
             </div>
           </div>
