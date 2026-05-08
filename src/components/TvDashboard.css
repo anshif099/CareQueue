@@ -662,14 +662,12 @@
   display: flex;
   align-items: center;
   width: max-content;
-  min-width: 100%;
-  animation: ticker 10s linear infinite;
+  animation: ticker 18s linear forwards;
   font-family: "Noto Sans Malayalam", "Nirmala UI", "Kartika", system-ui, sans-serif;
   font-size: 27px;
   color: #fff;
   font-weight: 900;
   will-change: transform;
-  transform: translate3d(0, 0, 0);
 }
 
 .tv-ticker-content span {
@@ -677,6 +675,7 @@
   align-items: center;
   margin-right: 72px;
   text-shadow: 0 2px 8px rgba(0, 0, 0, 0.42);
+  white-space: nowrap;
 }
 
 .tv-ticker-content span::before {
@@ -698,8 +697,8 @@
 }
 
 @keyframes ticker {
-  0% { transform: translate3d(0, 0, 0); }
-  100% { transform: translate3d(-50%, 0, 0); }
+  0% { transform: translate3d(100%, 0, 0); }
+  100% { transform: translate3d(calc(-100% - 50px), 0, 0); }
 }
 
 @media (max-width: 900px) {

@@ -1,40 +1,60 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { fetchLiveMalayalamHeadlines } from '../services/newsService.js'
 
-const TICKER_REFRESH_MS = 1 * 60 * 1000
+const BATCH_SIZE = 10
 
 function NewsTickerWidget() {
-  const [headlines, setHeadlines] = useState([])
+  const [allHeadlines, setAllHeadlines] = useState([])
+  const [batchIndex, setBatchIndex] = useState(0)
+  const [animKey, setAnimKey] = useState(0)
   const [lastUpdatedAt, setLastUpdatedAt] = useState(null)
+  const fetchingRef = useRef(false)
 
-  useEffect(() => {
-    let isMounted = true
-
-    async function loadHeadlines() {
-      const nextHeadlines = await fetchLiveMalayalamHeadlines()
-      if (!isMounted) return
-
-      if (nextHeadlines.length > 0) {
-        setHeadlines(nextHeadlines)
+  const loadHeadlines = useCallback(async () => {
+    if (fetchingRef.current) return
+    fetchingRef.current = true
+    try {
+      const headlines = await fetchLiveMalayalamHeadlines()
+      if (headlines.length > 0) {
+        setAllHeadlines(headlines)
         setLastUpdatedAt(Date.now())
       }
-    }
-
-    loadHeadlines()
-    const refreshTimer = window.setInterval(loadHeadlines, TICKER_REFRESH_MS)
-
-    return () => {
-      isMounted = false
-      window.clearInterval(refreshTimer)
+    } finally {
+      fetchingRef.current = false
     }
   }, [])
 
-  const tickerItems = useMemo(() => {
-    if (headlines.length === 0) {
+  useEffect(() => {
+    loadHeadlines()
+  }, [loadHeadlines])
+
+  const currentBatch = useMemo(() => {
+    if (allHeadlines.length === 0) {
       return ['ലൈവ് വാര്‍ത്തകള്‍ ലോഡ് ചെയ്യുന്നു...']
     }
-    return headlines
-  }, [headlines])
+    const start = (batchIndex * BATCH_SIZE) % allHeadlines.length
+    const batch = []
+    for (let i = 0; i < BATCH_SIZE && i < allHeadlines.length; i++) {
+      batch.push(allHeadlines[(start + i) % allHeadlines.length])
+    }
+    return batch
+  }, [allHeadlines, batchIndex])
+
+  function handleAnimationEnd() {
+    const nextBatch = batchIndex + 1
+    const nextStart = nextBatch * BATCH_SIZE
+
+    if (nextStart >= allHeadlines.length) {
+      // All batches shown — fetch fresh headlines & restart
+      setBatchIndex(0)
+      loadHeadlines()
+    } else {
+      setBatchIndex(nextBatch)
+    }
+
+    // Re-trigger animation
+    setAnimKey((prev) => prev + 1)
+  }
 
   return (
     <footer className="tv-ticker" aria-label="Live Malayalam news headlines">
@@ -43,9 +63,13 @@ function NewsTickerWidget() {
         <strong>LIVE NEWS</strong>
       </div>
       <div className="tv-ticker-track">
-        <div className="tv-ticker-content">
-          {[...tickerItems, ...tickerItems].map((headline, index) => (
-            <span key={`${headline}-${index}`}>{headline}</span>
+        <div
+          className="tv-ticker-content"
+          key={animKey}
+          onAnimationEnd={handleAnimationEnd}
+        >
+          {currentBatch.map((headline, index) => (
+            <span key={index}>{headline}</span>
           ))}
         </div>
       </div>
