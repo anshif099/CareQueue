@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { fetchLiveMalayalamHeadlines } from '../services/newsService.js'
 
-const TICKER_REFRESH_MS = 2 * 60 * 1000
+const TICKER_REFRESH_MS = 1 * 60 * 1000
 
 function NewsTickerWidget() {
   const [headlines, setHeadlines] = useState([])
