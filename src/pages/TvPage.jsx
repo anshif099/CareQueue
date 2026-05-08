@@ -320,9 +320,15 @@ function TvPage() {
             tvAd.type === 'video' ? (
               adYouTubeId ? (
                 <iframe
-                  src={`https://www.youtube.com/embed/${adYouTubeId}?autoplay=1&mute=1&loop=1&playlist=${adYouTubeId}&controls=0&modestbranding=1`}
+                  src={`https://www.youtube.com/embed/${adYouTubeId}?autoplay=1&mute=1&loop=1&playlist=${adYouTubeId}&controls=0&modestbranding=1&iv_load_policy=3&rel=0`}
                   allow="autoplay; encrypted-media"
-                  style={{ width: '100%', height: '100%', border: 'none' }}
+                  style={{ 
+                    width: '100%', 
+                    height: '100%', 
+                    border: 'none',
+                    transform: 'scale(1.1)', // Slight scale to hide YouTube edges if needed
+                    objectFit: 'cover'
+                  }}
                 />
               ) : (
                 <video 
@@ -332,7 +338,7 @@ function TvPage() {
                   loop 
                   muted 
                   playsInline 
-                  style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                  style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                 />
               )
             ) : (
