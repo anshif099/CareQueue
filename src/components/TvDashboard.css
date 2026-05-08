@@ -224,11 +224,17 @@
   position: relative;
 }
 
-.tv-right-panel video,
-.tv-right-panel img {
+.tv-right-panel video {
   width: 100%;
   height: 100%;
   object-fit: contain;
+  display: block;
+}
+
+.tv-right-panel img {
+  width: 100%;
+  height: 100%;
+  object-fit: fill;
   display: block;
 }
 
