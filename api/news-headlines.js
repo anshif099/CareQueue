@@ -1,4 +1,8 @@
-const GOOGLE_NEWS_RSS_URL = 'https://news.google.com/rss/search?q=Kerala&hl=ml&gl=IN&ceid=IN:ml'
+// Google News top headlines + Kerala-specific news in Malayalam
+const RSS_FEEDS = [
+  'https://news.google.com/rss?hl=ml&gl=IN&ceid=IN:ml',
+  'https://news.google.com/rss/search?q=Kerala+OR+%E0%B4%95%E0%B5%87%E0%B4%B0%E0%B4%B3%E0%B4%82&hl=ml&gl=IN&ceid=IN:ml',
+]
 
 function cleanHeadline(value) {
   return value
@@ -23,7 +27,16 @@ function extractHeadlinesFromRss(xml) {
     .filter((headline) => /[\u0D00-\u0D7F]/.test(headline))
     .filter((headline) => headline.length > 12)
 
-  return Array.from(new Set(headlines)).slice(0, 20)
+  return headlines
+}
+
+function shuffleArray(array) {
+  const shuffled = [...array]
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]
+  }
+  return shuffled
 }
 
 export default async function handler(request, response) {
@@ -42,30 +55,44 @@ export default async function handler(request, response) {
   }
 
   try {
-    const rssUrl = `${GOOGLE_NEWS_RSS_URL}&_t=${Math.floor(Date.now() / 60000)}`
-    const sourceResponse = await fetch(rssUrl, {
-      headers: {
-        Accept: 'application/rss+xml, application/xml, text/xml',
-        'User-Agent': 'CareQueue-TV/1.0',
-      },
-    })
+    // Fetch from multiple RSS feeds in parallel for more variety
+    const results = await Promise.allSettled(
+      RSS_FEEDS.map(async (feedUrl) => {
+        const res = await fetch(feedUrl, {
+          headers: {
+            Accept: 'application/rss+xml, application/xml, text/xml',
+            'User-Agent': 'CareQueue-TV/1.0',
+          },
+        })
+        if (!res.ok) throw new Error(`RSS ${res.status}`)
+        return extractHeadlinesFromRss(await res.text())
+      })
+    )
 
-    if (!sourceResponse.ok) {
-      throw new Error(`Google News RSS responded with ${sourceResponse.status}`)
+    // Merge headlines from all feeds, deduplicate, shuffle
+    const allHeadlines = results
+      .filter((r) => r.status === 'fulfilled')
+      .flatMap((r) => r.value)
+
+    const unique = Array.from(new Set(allHeadlines))
+    const headlines = shuffleArray(unique).slice(0, 25)
+
+    if (headlines.length === 0) {
+      throw new Error('No headlines found from any feed')
     }
 
-    const headlines = extractHeadlinesFromRss(await sourceResponse.text())
-    response.setHeader('Cache-Control', 'public, s-maxage=60, stale-while-revalidate=60')
+    // Short cache so headlines stay fresh
+    response.setHeader('Cache-Control', 'public, s-maxage=45, stale-while-revalidate=30')
     response.status(200).json({
       headlines,
       source: 'Google News Malayalam',
+      count: headlines.length,
       updatedAt: new Date().toISOString(),
     })
   } catch (error) {
     response.status(502).json({
       error: error.message || 'Unable to fetch news headlines',
       headlines: [],
-      source: GOOGLE_NEWS_RSS_URL,
     })
   }
 }

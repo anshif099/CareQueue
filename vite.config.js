@@ -1,7 +1,10 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
-const googleNewsRssUrl = 'https://news.google.com/rss/search?q=Kerala&hl=ml&gl=IN&ceid=IN:ml'
+const rssFeedUrls = [
+  'https://news.google.com/rss?hl=ml&gl=IN&ceid=IN:ml',
+  'https://news.google.com/rss/search?q=Kerala+OR+%E0%B4%95%E0%B5%87%E0%B4%B0%E0%B4%B3%E0%B4%82&hl=ml&gl=IN&ceid=IN:ml',
+]
 
 function cleanHeadline(value) {
   return value
@@ -23,12 +26,19 @@ function cleanHeadline(value) {
 
 function extractHeadlinesFromRss(xml) {
   const titleMatches = Array.from(xml.matchAll(/<item>[\s\S]*?<title>([\s\S]*?)<\/title>[\s\S]*?<\/item>/gi))
-  const headlines = titleMatches
+  return titleMatches
     .map((match) => cleanHeadline(match[1]))
     .filter((headline) => /[\u0D00-\u0D7F]/.test(headline))
     .filter((headline) => headline.length > 12)
+}
 
-  return Array.from(new Set(headlines)).slice(0, 20)
+function shuffleArray(array) {
+  const shuffled = [...array]
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]
+  }
+  return shuffled
 }
 
 function liveNewsDevApi() {
@@ -37,21 +47,31 @@ function liveNewsDevApi() {
     configureServer(server) {
       server.middlewares.use('/api/news-headlines', async (_request, response) => {
         try {
-          const sourceResponse = await fetch(googleNewsRssUrl, {
-            headers: {
-              Accept: 'application/rss+xml, application/xml, text/xml',
-              'User-Agent': 'CareQueue-TV/1.0',
-            },
-          })
+          const results = await Promise.allSettled(
+            rssFeedUrls.map(async (feedUrl) => {
+              const res = await fetch(feedUrl, {
+                headers: {
+                  Accept: 'application/rss+xml, application/xml, text/xml',
+                  'User-Agent': 'CareQueue-TV/1.0',
+                },
+              })
+              if (!res.ok) throw new Error(`RSS ${res.status}`)
+              return extractHeadlinesFromRss(await res.text())
+            })
+          )
 
-          if (!sourceResponse.ok) {
-            throw new Error(`Google News RSS responded with ${sourceResponse.status}`)
-          }
+          const allHeadlines = results
+            .filter((r) => r.status === 'fulfilled')
+            .flatMap((r) => r.value)
+
+          const unique = Array.from(new Set(allHeadlines))
+          const headlines = shuffleArray(unique).slice(0, 25)
 
           response.setHeader('Content-Type', 'application/json; charset=utf-8')
           response.end(JSON.stringify({
-            headlines: extractHeadlinesFromRss(await sourceResponse.text()),
+            headlines,
             source: 'Google News Malayalam',
+            count: headlines.length,
             updatedAt: new Date().toISOString(),
           }))
         } catch (error) {
@@ -60,7 +80,6 @@ function liveNewsDevApi() {
           response.end(JSON.stringify({
             error: error.message || 'Unable to fetch news headlines',
             headlines: [],
-            source: googleNewsRssUrl,
           }))
         }
       })
