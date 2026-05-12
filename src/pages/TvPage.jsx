@@ -128,7 +128,15 @@ function TvPage() {
   const [dataError, setDataError] = useState('')
   const [isDoctorsLoading, setIsDoctorsLoading] = useState(true)
   const [currentTime, setCurrentTime] = useState(getDeviceTime())
-  const [tvAd, setTvAd] = useState(null)
+  const [tvAds, setTvAds] = useState([])
+  const [activeAd, setActiveAd] = useState(() => {
+    try {
+      const cached = localStorage.getItem('carequeue-active-ad')
+      return cached ? JSON.parse(cached) : null
+    } catch {
+      return null
+    }
+  })
 
   useTvDisplayMode()
 
@@ -163,11 +171,30 @@ function TvPage() {
   }, [])
 
   useEffect(() => {
-    const unsubscribe = onValue(databaseRef(database, 'settings/tvAd'), (snapshot) => {
-      setTvAd(snapshot.val())
+    const unsubscribe = onValue(databaseRef(database, 'settings/tvAds'), (snapshot) => {
+      const data = snapshot.val()
+      if (data) {
+        setTvAds(Object.entries(data).map(([id, ad]) => ({ id, ...ad })))
+      } else {
+        setTvAds([])
+      }
     })
     return unsubscribe
   }, [])
+
+  // Determine active ad based on schedule
+  useEffect(() => {
+    const now = new Date()
+    const scheduled = tvAds
+      .filter(ad => new Date(ad.scheduledAt) <= now)
+      .sort((a, b) => new Date(b.scheduledAt) - new Date(a.scheduledAt))
+    
+    const latestActive = scheduled[0] || null
+    if (latestActive) {
+      setActiveAd(latestActive)
+      localStorage.setItem('carequeue-active-ad', JSON.stringify(latestActive))
+    }
+  }, [tvAds, currentTime])
 
   function handleLogin(event) {
     event.preventDefault()
@@ -209,11 +236,11 @@ function TvPage() {
   const mainCurrentPatient = mainInConsult || mainDoctorQueue[0] || null
 
   const adYouTubeId = useMemo(() => {
-    if (tvAd?.type === 'video' && tvAd?.url) {
-      return extractYouTubeVideoId(tvAd.url)
+    if (activeAd?.type === 'video' && activeAd?.url) {
+      return extractYouTubeVideoId(activeAd.url)
     }
     return ''
-  }, [tvAd])
+  }, [activeAd])
 
   const activeCounters = useMemo(() => {
     return doctors.filter(d => (d.status ?? 'Consulting') === 'Consulting' || d.servingToken).map(d => {
@@ -316,8 +343,8 @@ function TvPage() {
         </div>
 
         <div className="tv-right-panel">
-          {tvAd?.url ? (
-            tvAd.type === 'video' ? (
+          {activeAd?.url ? (
+            activeAd.type === 'video' ? (
               adYouTubeId ? (
                 <iframe
                   src={`https://www.youtube.com/embed/${adYouTubeId}?autoplay=1&mute=1&loop=1&playlist=${adYouTubeId}&controls=0&modestbranding=1&iv_load_policy=3&rel=0`}
@@ -331,17 +358,20 @@ function TvPage() {
                 />
               ) : (
                 <video 
-                  key={tvAd.url}
-                  src={tvAd.url} 
+                  key={activeAd.url}
+                  src={activeAd.url} 
                   autoPlay 
                   loop 
                   muted 
                   playsInline 
                   style={{ width: '100%', height: '100%', objectFit: 'fill' }}
+                  onLoadedData={() => {
+                    // Optional: could signal "fully loaded" here if needed
+                  }}
                 />
               )
             ) : (
-              <img src={tvAd.url} alt="Advertisement" />
+              <img src={activeAd.url} alt="Advertisement" />
             )
           ) : (
             <div className="tv-ad-empty">

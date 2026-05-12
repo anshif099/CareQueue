@@ -119,9 +119,11 @@ function SuperAdminPage() {
   const [adUrl, setAdUrl] = useState('')
   const [adType, setAdType] = useState('image')
   const [adFileName, setAdFileName] = useState('')
+  const [adSchedule, setAdSchedule] = useState('')
   const [adError, setAdError] = useState('')
   const [isProcessingAdFile, setIsProcessingAdFile] = useState(false)
   const [isSavingAd, setIsSavingAd] = useState(false)
+  const [tvAds, setTvAds] = useState([])
 
   const [doctors, setDoctors] = useState([])
   const [appointments, setAppointments] = useState([])
@@ -151,16 +153,12 @@ function SuperAdminPage() {
       }
     })
 
-    const unsubAd = onValue(databaseRef(database, 'settings/tvAd'), (snapshot) => {
+    const unsubAds = onValue(databaseRef(database, 'settings/tvAds'), (snapshot) => {
       const data = snapshot.val()
       if (data) {
-        setAdUrl(data.url || '')
-        setAdType(data.type || 'image')
-        setAdFileName(data.name || '')
+        setTvAds(Object.entries(data).map(([id, ad]) => ({ id, ...ad })).sort((a, b) => new Date(b.scheduledAt || 0) - new Date(a.scheduledAt || 0)))
       } else {
-        setAdUrl('')
-        setAdType('image')
-        setAdFileName('')
+        setTvAds([])
       }
     })
 
@@ -178,7 +176,7 @@ function SuperAdminPage() {
 
     return () => {
       unsubscribe()
-      unsubAd()
+      unsubAds()
       unsubDocs()
       unsubAppts()
     }
@@ -283,13 +281,19 @@ function SuperAdminPage() {
       return
     }
 
+    if (!adSchedule) {
+      setAdError('Please select a scheduled date and time.')
+      return
+    }
+
     setIsSavingAd(true)
     setAdError('')
     try {
       const nextAd = {
         source: isBase64AdImage ? 'base64' : 'url',
         type: adType,
-        updatedAt: serverTimestamp(),
+        createdAt: serverTimestamp(),
+        scheduledAt: new Date(adSchedule).toISOString(),
         url: nextAdUrl,
       }
 
@@ -297,8 +301,11 @@ function SuperAdminPage() {
         nextAd.name = adFileName
       }
 
-      await set(databaseRef(database, 'settings/tvAd'), nextAd)
-      alert('TV Advertisement updated successfully!')
+      await push(databaseRef(database, 'settings/tvAds'), nextAd)
+      alert('TV Advertisement scheduled successfully!')
+      setAdUrl('')
+      setAdFileName('')
+      setAdSchedule('')
     } catch (err) {
       alert('Failed to save ad: ' + err.message)
     } finally {
@@ -361,16 +368,12 @@ function SuperAdminPage() {
     }
   }
 
-  const handleRemoveAd = async () => {
+  const handleRemoveAd = async (adId) => {
+    if (!confirm('Are you sure you want to remove this advertisement?')) return
+    
     setIsSavingAd(true)
-    setAdError('')
-
     try {
-      await remove(databaseRef(database, 'settings/tvAd'))
-      setAdUrl('')
-      setAdType('image')
-      setAdFileName('')
-      alert('TV Advertisement removed successfully!')
+      await remove(databaseRef(database, `settings/tvAds/${adId}`))
     } catch (err) {
       alert('Failed to remove ad: ' + err.message)
     } finally {
@@ -589,6 +592,18 @@ function SuperAdminPage() {
                   )}
                 </div>
 
+                <div className="sa-form-group" style={{ margin: 0 }}>
+                  <label>Scheduled Publishing Date & Time</label>
+                  <input 
+                    required
+                    type="datetime-local"
+                    value={adSchedule}
+                    onChange={(e) => setAdSchedule(e.target.value)}
+                    min={new Date().toISOString().slice(0, 16)}
+                  />
+                  <p style={{ fontSize: '12px', color: '#94a3b8' }}>Content will automatically replace the old one at this time.</p>
+                </div>
+
                 {adError && <p className="sa-login-error">{adError}</p>}
 
                 {adUrl && (
@@ -612,20 +627,51 @@ function SuperAdminPage() {
                 )}
                 
                 <button type="submit" className="sa-submit-btn" disabled={isSavingAd || isProcessingAdFile}>
-                  {isProcessingAdFile ? 'Processing image...' : isSavingAd ? 'Saving...' : 'Publish to TV Screens'}
+                  {isProcessingAdFile ? 'Processing...' : isSavingAd ? 'Saving...' : 'Schedule & Publish'}
                 </button>
-                {adUrl && (
-                  <button
-                    className="sa-action-btn"
-                    disabled={isSavingAd || isProcessingAdFile}
-                    onClick={handleRemoveAd}
-                    type="button"
-                  >
-                    Remove Current Advertisement
-                  </button>
-                )}
               </form>
             </div>
+
+            {tvAds.length > 0 && (
+              <div style={{ marginTop: '32px' }}>
+                <h3 style={{ color: '#f8fafc', marginBottom: '16px' }}>Current & Scheduled Advertisements</h3>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '16px' }}>
+                  {tvAds.map(ad => {
+                    const isPast = new Date(ad.scheduledAt) <= new Date()
+                    return (
+                      <div key={ad.id} className="sa-hospital-card" style={{ borderLeft: isPast ? '4px solid #3b82f6' : '4px solid #10b981' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+                          <span style={{ fontSize: '12px', padding: '2px 8px', borderRadius: '4px', background: isPast ? '#3b82f622' : '#10b98122', color: isPast ? '#3b82f6' : '#10b981' }}>
+                            {isPast ? 'Currently Active' : 'Scheduled'}
+                          </span>
+                          <button 
+                            onClick={() => handleRemoveAd(ad.id)}
+                            style={{ background: 'transparent', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: '18px' }}
+                          >
+                            &times;
+                          </button>
+                        </div>
+                        <div style={{ height: '120px', background: '#020617', borderRadius: '4px', overflow: 'hidden', marginBottom: '8px' }}>
+                          {ad.type === 'video' ? (
+                            extractYouTubeVideoId(ad.url) ? (
+                              <img src={`https://img.youtube.com/vi/${extractYouTubeVideoId(ad.url)}/mqdefault.jpg`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                            ) : (
+                              <video src={ad.url} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                            )
+                          ) : (
+                            <img src={ad.url} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                          )}
+                        </div>
+                        <p style={{ fontSize: '13px', color: '#f8fafc', margin: '4px 0' }}><strong>Type:</strong> {ad.type}</p>
+                        <p style={{ fontSize: '13px', color: '#94a3b8', margin: '4px 0' }}>
+                          <strong>Date:</strong> {new Date(ad.scheduledAt).toLocaleString()}
+                        </p>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
           </div>
         )}
 
