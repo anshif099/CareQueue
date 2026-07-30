@@ -1,18 +1,25 @@
 import { useEffect, useMemo, useState } from 'react'
 import { onValue, ref as databaseRef } from 'firebase/database'
 import { database } from '../lib/firebase.jsx'
+import {
+  DEFAULT_HOSPITAL,
+  getDoctorHospitalId,
+  isDoctorAvailableNow,
+  mapHospitals,
+  TV_DOCTOR_ROTATION_MS,
+} from '../lib/tvDisplay.js'
 import NewsTickerWidget from '../components/NewsTickerWidget.jsx'
 import '../components/TvDashboard.css'
 
-const doctorSessionKey = 'carequeue-doctor-id'
+const hospitalSessionKey = 'carequeue-tv-hospital-id'
 
-function getDeviceTime() {
+function getDeviceTime(date) {
   const parts = new Intl.DateTimeFormat(undefined, {
     hour: '2-digit',
     minute: '2-digit',
     second: '2-digit',
     hour12: true,
-  }).formatToParts(new Date())
+  }).formatToParts(date)
 
   const hour = parts.find((part) => part.type === 'hour')?.value ?? '12'
   const minute = parts.find((part) => part.type === 'minute')?.value ?? '00'
@@ -33,13 +40,13 @@ function getDateKey(date) {
 function mapDoctors(snapshot) {
   const doctors = snapshot.val()
   if (!doctors) return []
-  return Object.entries(doctors).map(([id, doctor]) => ({ id, ...doctor }))
+  return Object.entries(doctors).map(([id, doctor]) => ({ ...doctor, id }))
 }
 
 function mapAppointments(snapshot) {
   const appointments = snapshot.val()
   if (!appointments) return []
-  return Object.entries(appointments).map(([id, appointment]) => ({ id, ...appointment }))
+  return Object.entries(appointments).map(([id, appointment]) => ({ ...appointment, id }))
 }
 
 function isActiveAppointment(appointment) {
@@ -120,16 +127,22 @@ function useTvDisplayMode() {
 }
 
 function TvPage() {
+  const [hospitals, setHospitals] = useState([DEFAULT_HOSPITAL])
   const [doctors, setDoctors] = useState([])
   const [appointments, setAppointments] = useState([])
-  const [loginId, setLoginId] = useState('')
-  const [doctorId, setDoctorId] = useState(() => sessionStorage.getItem(doctorSessionKey) || '')
+  const [hospitalLoginId, setHospitalLoginId] = useState('')
+  const [hospitalId, setHospitalId] = useState(
+    () => sessionStorage.getItem(hospitalSessionKey) || '',
+  )
+  const [activeDoctorId, setActiveDoctorId] = useState('')
   const [error, setError] = useState('')
-  const [dataError, setDataError] = useState('')
+  const [doctorsError, setDoctorsError] = useState('')
+  const [appointmentsError, setAppointmentsError] = useState('')
+  const [isHospitalsLoading, setIsHospitalsLoading] = useState(true)
   const [isDoctorsLoading, setIsDoctorsLoading] = useState(true)
-  const [currentTime, setCurrentTime] = useState(getDeviceTime())
+  const [currentDate, setCurrentDate] = useState(() => new Date())
   const [tvAds, setTvAds] = useState([])
-  const [activeAd, setActiveAd] = useState(() => {
+  const [cachedActiveAd] = useState(() => {
     try {
       const cached = localStorage.getItem('carequeue-active-ad')
       return cached ? JSON.parse(cached) : null
@@ -142,9 +155,23 @@ function TvPage() {
 
   useEffect(() => {
     const timer = window.setInterval(() => {
-      setCurrentTime(getDeviceTime())
+      setCurrentDate(new Date())
     }, 1000)
     return () => window.clearInterval(timer)
+  }, [])
+
+  useEffect(() => {
+    const unsubscribe = onValue(
+      databaseRef(database, 'hospitals'),
+      (snapshot) => {
+        setHospitals(mapHospitals(snapshot.val()))
+        setIsHospitalsLoading(false)
+      },
+      () => {
+        setIsHospitalsLoading(false)
+      },
+    )
+    return unsubscribe
   }, [])
 
   useEffect(() => {
@@ -153,10 +180,10 @@ function TvPage() {
       (snapshot) => {
         setDoctors(mapDoctors(snapshot))
         setIsDoctorsLoading(false)
-        setDataError('')
+        setDoctorsError('')
       },
       (firebaseError) => {
-        setDataError(firebaseError.message)
+        setDoctorsError(firebaseError.message)
         setIsDoctorsLoading(false)
       },
     )
@@ -164,9 +191,16 @@ function TvPage() {
   }, [])
 
   useEffect(() => {
-    const unsubscribe = onValue(databaseRef(database, 'appointments'), (snapshot) => {
-      setAppointments(mapAppointments(snapshot))
-    })
+    const unsubscribe = onValue(
+      databaseRef(database, 'appointments'),
+      (snapshot) => {
+        setAppointments(mapAppointments(snapshot))
+        setAppointmentsError('')
+      },
+      (firebaseError) => {
+        setAppointmentsError(firebaseError.message)
+      },
+    )
     return unsubscribe
   }, [])
 
@@ -182,47 +216,167 @@ function TvPage() {
     return unsubscribe
   }, [])
 
-  // Determine active ad based on schedule
-  useEffect(() => {
-    const now = new Date()
-    const scheduled = tvAds
-      .filter(ad => new Date(ad.scheduledAt) <= now)
+  const activeAd = useMemo(() => {
+    const scheduled = [...tvAds]
+      .filter((ad) => new Date(ad.scheduledAt) <= currentDate)
       .sort((a, b) => new Date(b.scheduledAt) - new Date(a.scheduledAt))
-    
-    const latestActive = scheduled[0] || null
-    if (latestActive) {
-      setActiveAd(latestActive)
-      localStorage.setItem('carequeue-active-ad', JSON.stringify(latestActive))
-    }
-  }, [tvAds, currentTime])
 
-  function handleLogin(event) {
-    event.preventDefault()
-    const normalizedLogin = loginId.trim().toLowerCase()
-    const matchedDoctor = doctors.find(
-      (currentDoctor) => String(currentDoctor.loginId ?? '').trim().toLowerCase() === normalizedLogin,
-    )
+    return scheduled[0] || cachedActiveAd
+  }, [cachedActiveAd, currentDate, tvAds])
 
-    if (!matchedDoctor) {
-      setError('Doctor login ID not found')
+  useEffect(() => {
+    if (!activeAd) {
       return
     }
 
-    sessionStorage.setItem(doctorSessionKey, matchedDoctor.id)
-    setDoctorId(matchedDoctor.id)
+    try {
+      localStorage.setItem('carequeue-active-ad', JSON.stringify(activeAd))
+    } catch {
+      // The live ad still works when local storage is unavailable.
+    }
+  }, [activeAd])
+
+  function handleLogin(event) {
+    event.preventDefault()
+    const enteredHospitalId = hospitalLoginId.trim()
+    const matchedHospital = hospitals.find(
+      (hospital) => String(hospital.id).trim() === enteredHospitalId,
+    )
+    const hasHospitalDoctors = doctors.some(
+      (doctor) => getDoctorHospitalId(doctor) === enteredHospitalId,
+    )
+
+    if (!enteredHospitalId || (!matchedHospital && !hasHospitalDoctors)) {
+      setError('Hospital ID not found')
+      return
+    }
+
+    const nextHospitalId = matchedHospital?.id || enteredHospitalId
+    sessionStorage.setItem(hospitalSessionKey, nextHospitalId)
+    setHospitalId(nextHospitalId)
+    setActiveDoctorId('')
     setError('')
   }
 
-  const todayKey = getDateKey(new Date())
+  function handleChangeHospital() {
+    sessionStorage.removeItem(hospitalSessionKey)
+    setHospitalId('')
+    setHospitalLoginId('')
+    setActiveDoctorId('')
+    setError('')
+  }
 
-  // Process data for the TV screen
-  const mainDoctor = doctors.find(d => d.id === doctorId)
-  
+  const currentTime = getDeviceTime(currentDate)
+  const currentMinute = Math.floor(currentDate.getTime() / 60_000)
+  const todayKey = getDateKey(currentDate)
+
+  const selectedHospital = useMemo(() => {
+    const storedHospital = hospitals.find((hospital) => hospital.id === hospitalId)
+
+    if (storedHospital) {
+      return storedHospital
+    }
+
+    const hasHospitalDoctors = doctors.some(
+      (doctor) => getDoctorHospitalId(doctor) === hospitalId,
+    )
+
+    if (hospitalId && !isHospitalsLoading && hasHospitalDoctors) {
+      return {
+        id: hospitalId,
+        name: hospitalId,
+        location: 'Outpatient Department',
+      }
+    }
+
+    return null
+  }, [doctors, hospitalId, hospitals, isHospitalsLoading])
+
+  useEffect(() => {
+    if (hospitalId && !isHospitalsLoading && !isDoctorsLoading && !selectedHospital) {
+      sessionStorage.removeItem(hospitalSessionKey)
+    }
+  }, [hospitalId, isDoctorsLoading, isHospitalsLoading, selectedHospital])
+
+  const hospitalDoctors = useMemo(() => {
+    if (!selectedHospital) {
+      return []
+    }
+
+    return doctors.filter((doctor) => getDoctorHospitalId(doctor) === selectedHospital.id)
+  }, [doctors, selectedHospital])
+
+  const activeConsultDoctorIds = useMemo(
+    () =>
+      new Set(
+        appointments
+          .filter(
+            (appointment) =>
+              appointment.dateKey === todayKey &&
+              ['in_consult', 'serving'].includes(
+                String(appointment.status ?? '').toLowerCase(),
+              ),
+          )
+          .map((appointment) => appointment.doctorId),
+      ),
+    [appointments, todayKey],
+  )
+
+  const availableDoctors = useMemo(() => {
+    const availabilityTime = new Date(currentMinute * 60_000)
+
+    return hospitalDoctors
+      .filter(
+        (doctor) =>
+          isDoctorAvailableNow(doctor, availabilityTime) || activeConsultDoctorIds.has(doctor.id),
+      )
+      .sort((firstDoctor, secondDoctor) =>
+        getDoctorCounter(firstDoctor).localeCompare(getDoctorCounter(secondDoctor), undefined, {
+          numeric: true,
+        }),
+      )
+  }, [activeConsultDoctorIds, currentMinute, hospitalDoctors])
+
+  const rotationDoctorIds = availableDoctors.map((doctor) => doctor.id).join('\u001f')
+
+  useEffect(() => {
+    const doctorIds = rotationDoctorIds ? rotationDoctorIds.split('\u001f') : []
+
+    if (doctorIds.length < 2) {
+      return undefined
+    }
+
+    const timer = window.setInterval(() => {
+      setActiveDoctorId((currentDoctorId) => {
+        const storedIndex = doctorIds.indexOf(currentDoctorId)
+        const visibleIndex = storedIndex >= 0 ? storedIndex : 0
+        return doctorIds[(visibleIndex + 1) % doctorIds.length]
+      })
+    }, TV_DOCTOR_ROTATION_MS)
+
+    return () => window.clearInterval(timer)
+  }, [hospitalId, rotationDoctorIds])
+
+  const mainDoctor =
+    availableDoctors.find((doctor) => doctor.id === activeDoctorId) || availableDoctors[0] || null
+  const mainDoctorPosition = mainDoctor
+    ? availableDoctors.findIndex((doctor) => doctor.id === mainDoctor.id) + 1
+    : 0
+  const hospitalDoctorIds = useMemo(
+    () => new Set(hospitalDoctors.map((doctor) => doctor.id)),
+    [hospitalDoctors],
+  )
+
   const allActiveAppointments = useMemo(() => {
     return appointments
-      .filter((app) => app.dateKey === todayKey && isActiveAppointment(app))
+      .filter(
+        (appointment) =>
+          hospitalDoctorIds.has(appointment.doctorId) &&
+          appointment.dateKey === todayKey &&
+          isActiveAppointment(appointment),
+      )
       .sort(compareAppointments)
-  }, [appointments, todayKey])
+  }, [appointments, hospitalDoctorIds, todayKey])
 
   const mainDoctorQueue = useMemo(() => {
     if (!mainDoctor) return []
@@ -243,49 +397,82 @@ function TvPage() {
   }, [activeAd])
 
   const activeCounters = useMemo(() => {
-    return doctors.filter(d => (d.status ?? 'Consulting') === 'Consulting' || d.servingToken).map(d => {
-      const dQueue = allActiveAppointments.filter(app => app.doctorId === d.id)
-      const inCons = dQueue.find(app => ['in_consult', 'serving'].includes(String(app.status ?? '').toLowerCase()))
-      const curr = inCons || dQueue[0] || null
+    return availableDoctors.map((doctor) => {
+      const doctorQueue = allActiveAppointments.filter(
+        (appointment) => appointment.doctorId === doctor.id,
+      )
+      const inConsult = doctorQueue.find((appointment) =>
+        ['in_consult', 'serving'].includes(String(appointment.status ?? '').toLowerCase()),
+      )
+      const currentPatient = inConsult || doctorQueue[0] || null
+
       return {
-        id: d.id,
-        name: d.name,
-        department: d.department,
-        counter: getDoctorCounter(d),
-        token: curr?.token || d.servingToken || '--',
-        status: d.status || 'Consulting'
+        id: doctor.id,
+        name: doctor.name,
+        department: doctor.department,
+        counter: getDoctorCounter(doctor),
+        token: currentPatient?.token || doctor.servingToken || '--',
+        status: doctor.status || 'Consulting',
       }
     })
-  }, [doctors, allActiveAppointments])
+  }, [allActiveAppointments, availableDoctors])
 
-  if (!doctorId || (!mainDoctor && !isDoctorsLoading)) {
+  if (hospitalId && !selectedHospital && isHospitalsLoading) {
+    return <main className="tv-console tv-console-loading">Loading TV display...</main>
+  }
+
+  if (!hospitalId || !selectedHospital) {
     return (
       <main className="tv-login-page">
         <form className="tv-login-card" onSubmit={handleLogin}>
           <div>
             <p>TV Display</p>
-            <h1>Select Doctor</h1>
-            <span>Enter the doctor login ID to configure this screen.</span>
+            <h1>Connect Hospital</h1>
+            <span>Enter the TV Hospital ID shown in the Super Admin hospital list.</span>
           </div>
           <label>
-            Doctor login ID
+            Hospital ID
             <input
               autoComplete="username"
-              value={loginId}
-              onChange={(event) => setLoginId(event.target.value)}
-              placeholder="rajan-opd"
+              value={hospitalLoginId}
+              onChange={(event) => setHospitalLoginId(event.target.value)}
+              placeholder="default-primary"
             />
           </label>
-          {(error || dataError) && <p className="tv-login-error">{error || dataError}</p>}
-          <button disabled={isDoctorsLoading} type="submit">
-            {isDoctorsLoading ? 'Loading...' : 'Start TV Display'}
+          {(error || doctorsError || appointmentsError) && (
+            <p className="tv-login-error">
+              {error || doctorsError || appointmentsError}
+            </p>
+          )}
+          <button disabled={isHospitalsLoading || isDoctorsLoading} type="submit">
+            {isHospitalsLoading || isDoctorsLoading ? 'Loading...' : 'Start TV Display'}
           </button>
         </form>
       </main>
     )
   }
 
-  if (!mainDoctor) {
+  if (doctorsError || appointmentsError) {
+    return (
+      <main className="tv-login-page">
+        <section className="tv-login-card tv-data-error-card">
+          <div>
+            <p>TV Display</p>
+            <h1>Live data unavailable</h1>
+            <span>{doctorsError || appointmentsError}</span>
+          </div>
+          <button type="button" onClick={() => window.location.reload()}>
+            Retry
+          </button>
+          <button className="tv-secondary-button" type="button" onClick={handleChangeHospital}>
+            Change hospital
+          </button>
+        </section>
+      </main>
+    )
+  }
+
+  if (isDoctorsLoading) {
     return <main className="tv-console tv-console-loading">Loading TV display...</main>
   }
 
@@ -295,11 +482,14 @@ function TvPage() {
         <div className="tv-logo-area">
           <div className="tv-logo-icon">+</div>
           <div className="tv-logo-text">
-            <h1>CareQueue · City Health Clinic</h1>
-            <p>Outpatient Department</p>
+            <h1>CareQueue &middot; {selectedHospital.name || selectedHospital.id}</h1>
+            <p>{selectedHospital.location || 'Outpatient Department'}</p>
           </div>
         </div>
         <div className="tv-header-right">
+          <button className="tv-change-hospital" type="button" onClick={handleChangeHospital}>
+            Change hospital
+          </button>
           <div className="tv-live-badge"><span className="tv-dot"></span> LIVE</div>
           <div className="tv-time">
             {currentTime.time} <span>{currentTime.period}</span>
@@ -310,34 +500,55 @@ function TvPage() {
       <div className="tv-main-grid">
         <div className="tv-left-panel">
           <section className="tv-serving-section">
-            <h2 className="tv-section-title">NOW SERVING</h2>
-            <div className="tv-serving-display">
-              <div 
-                className="tv-huge-token" 
-                data-empty={!(mainCurrentPatient?.token || mainDoctor.servingToken)}
-              >
-                {mainCurrentPatient?.token || mainDoctor.servingToken || 'WAITING'}
-              </div>
-              <div className="tv-serving-details">
-                <span className="tv-pill">{getDoctorCounter(mainDoctor)}</span>
-                <span className="tv-dept-text">{mainDoctor.department} — Consultation</span>
-              </div>
-              <div className="tv-serving-doctor">{mainDoctor.name}</div>
+            <div className="tv-section-heading">
+              <h2 className="tv-section-title">NOW SERVING</h2>
+              {availableDoctors.length > 1 && (
+                <span>
+                  Doctor {mainDoctorPosition} of {availableDoctors.length} &middot; next in 15 seconds
+                </span>
+              )}
             </div>
+            {mainDoctor ? (
+              <div className="tv-serving-display" key={mainDoctor.id}>
+                <div
+                  className="tv-huge-token"
+                  data-empty={!(mainCurrentPatient?.token || mainDoctor.servingToken)}
+                >
+                  {mainCurrentPatient?.token || mainDoctor.servingToken || 'WAITING'}
+                </div>
+                <div className="tv-serving-details">
+                  <span className="tv-pill">{getDoctorCounter(mainDoctor)}</span>
+                  <span className="tv-dept-text">
+                    {mainDoctor.department || 'General'} &mdash; Consultation
+                  </span>
+                </div>
+                <div className="tv-serving-doctor">{mainDoctor.name || 'Doctor'}</div>
+              </div>
+            ) : (
+              <div className="tv-no-doctors">
+                <strong>No doctors available now</strong>
+                <span>
+                  Doctors will appear automatically when their consulting session starts.
+                </span>
+              </div>
+            )}
           </section>
 
           <section className="tv-counters-section">
             <h2 className="tv-section-title">COUNTER STATUS</h2>
             <div className="tv-counters-grid">
-              {activeCounters.slice(0, 6).map(counter => (
-                <div className="tv-counter-card" key={counter.id}>
+              {activeCounters.slice(0, 6).map((counter) => (
+                <div
+                  className="tv-counter-card"
+                  data-active={counter.id === mainDoctor?.id}
+                  key={counter.id}
+                >
                   <span>{counter.counter}</span>
                   <strong>{counter.token}</strong>
-                  <em data-status={counter.status === 'Consulting' ? 'open' : 'closed'}>
-                    {counter.status === 'Consulting' ? 'Open' : counter.status}
-                  </em>
+                  <em data-status="open">Open</em>
                 </div>
               ))}
+              {activeCounters.length === 0 && <p className="tv-empty-counters">No counters open</p>}
             </div>
           </section>
         </div>

@@ -10,12 +10,6 @@ const adminCredentials = {
 
 const sidebarItems = ['Overview', 'Live queues', 'Doctors', 'Reports', 'Settings']
 
-const queueRows = [
-  { token: 'A014', patient: 'Maya R.', department: 'General', status: 'Waiting' },
-  { token: 'B021', patient: 'Rahul N.', department: 'Dental', status: 'In room' },
-  { token: 'C008', patient: 'Anu K.', department: 'Pediatrics', status: 'Ready' },
-]
-
 const emptyDoctorForm = {
   id: '',
   loginId: '',
@@ -117,6 +111,9 @@ function mapDoctors(snapshot) {
 
 function AdminPage() {
   const [isAuthed, setIsAuthed] = useState(() => sessionStorage.getItem('carequeue-admin') === '1')
+  const [activeHospitalId, setActiveHospitalId] = useState(
+    () => sessionStorage.getItem('carequeue-active-hospital') || 'default-primary',
+  )
   const [activeItem, setActiveItem] = useState('Overview')
   const [formData, setFormData] = useState({ username: '', password: '' })
   const [error, setError] = useState('')
@@ -127,7 +124,11 @@ function AdminPage() {
   const [doctorForm, setDoctorForm] = useState(emptyDoctorForm)
   const [isSavingDoctor, setIsSavingDoctor] = useState(false)
   const [doctorFormError, setDoctorFormError] = useState('')
-  const [appointments, setAppointments] = useState([])
+  const [allAppointments, setAllAppointments] = useState([])
+  const appointments = useMemo(() => {
+    const hospitalDoctorIds = new Set(doctors.map((doctor) => doctor.id))
+    return allAppointments.filter((appointment) => hospitalDoctorIds.has(appointment.doctorId))
+  }, [allAppointments, doctors])
 
   const today = useMemo(
     () =>
@@ -147,7 +148,11 @@ function AdminPage() {
     const unsubscribe = onValue(
       databaseRef(database, 'doctors'),
       (snapshot) => {
-        setDoctors(mapDoctors(snapshot))
+        setDoctors(
+          mapDoctors(snapshot).filter(
+            (doctor) => (doctor.hospitalId || 'default-primary') === activeHospitalId,
+          ),
+        )
         setIsDoctorsLoading(false)
         setDoctorsError('')
       },
@@ -160,7 +165,7 @@ function AdminPage() {
     const unsubscribeAppointments = onValue(
       databaseRef(database, 'appointments'),
       (snapshot) => {
-        setAppointments(mapAppointments(snapshot))
+        setAllAppointments(mapAppointments(snapshot))
       }
     )
 
@@ -168,7 +173,7 @@ function AdminPage() {
       unsubscribe()
       unsubscribeAppointments()
     }
-  }, [isAuthed])
+  }, [activeHospitalId, isAuthed])
 
   async function handleLogin(event) {
     event.preventDefault()
@@ -179,6 +184,7 @@ function AdminPage() {
     ) {
       sessionStorage.setItem('carequeue-admin', '1')
       sessionStorage.setItem('carequeue-active-hospital', 'default-primary')
+      setActiveHospitalId('default-primary')
       setIsAuthed(true)
       setError('')
       return
@@ -193,6 +199,7 @@ function AdminPage() {
         if (matched) {
           sessionStorage.setItem('carequeue-admin', '1')
           sessionStorage.setItem('carequeue-active-hospital', matched.id)
+          setActiveHospitalId(matched.id)
           setIsAuthed(true)
           setError('')
           return
@@ -203,12 +210,6 @@ function AdminPage() {
     }
 
     setError('Invalid username or password')
-  }
-
-  function handleLogout() {
-    sessionStorage.removeItem('carequeue-admin')
-    setIsAuthed(false)
-    setFormData({ username: '', password: '' })
   }
 
   function updateDoctorField(field, value) {
@@ -273,6 +274,7 @@ function AdminPage() {
       }
 
       const doctorData = {
+        hospitalId: activeHospitalId,
         loginId,
         name: doctorForm.name.trim(),
         department: doctorForm.department.trim(),
@@ -419,7 +421,6 @@ function AdminPage() {
           />
         ) : activeItem === 'Live queues' ? (
           <LiveQueues 
-            onLogout={handleLogout} 
             appointments={appointments}
             doctors={doctors}
           />
@@ -428,7 +429,6 @@ function AdminPage() {
         ) : (
           <DashboardOverview 
             activeItem={activeItem} 
-            onLogout={handleLogout} 
             today={today} 
             appointments={appointments}
             doctors={doctors}
@@ -439,7 +439,7 @@ function AdminPage() {
   )
 }
 
-function LiveQueues({ onLogout, appointments, doctors }) {
+function LiveQueues({ appointments, doctors }) {
   const [currentTime, setCurrentTime] = useState(() => new Date())
   
   useEffect(() => {
@@ -891,7 +891,7 @@ function ClinicSettings() {
   )
 }
 
-function DashboardOverview({ activeItem, onLogout, today, appointments, doctors }) {
+function DashboardOverview({ activeItem, today, appointments, doctors }) {
   const [currentTime, setCurrentTime] = useState(() => new Date())
   
   useEffect(() => {

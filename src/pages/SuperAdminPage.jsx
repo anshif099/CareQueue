@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { onValue, push, remove, set, update, ref as databaseRef, serverTimestamp } from 'firebase/database'
+import { onValue, push, remove, update, ref as databaseRef, serverTimestamp } from 'firebase/database'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import { database } from '../lib/firebase.jsx'
 import '../components/SuperAdminPage.css'
@@ -7,6 +7,14 @@ import '../components/SuperAdminPage.css'
 const SUPER_ADMIN = {
   username: 'superadmin',
   password: 'superadmin123'
+}
+
+const DEFAULT_HOSPITAL = {
+  id: 'default-primary',
+  name: 'City Health Clinic (Primary)',
+  location: 'Main Headquarters',
+  contact: 'admin@cityhealth.com',
+  isPrimary: true,
 }
 
 const AD_IMAGE_MAX_WIDTH = 1600
@@ -111,7 +119,7 @@ function SuperAdminPage() {
   const [error, setError] = useState('')
   const [activeTab, setActiveTab] = useState('overview')
   
-  const [hospitals, setHospitals] = useState([])
+  const [hospitals, setHospitals] = useState([DEFAULT_HOSPITAL])
   const [isHospitalFormOpen, setIsHospitalFormOpen] = useState(false)
   const [editingHospitalId, setEditingHospitalId] = useState(null)
   const [hospitalForm, setHospitalForm] = useState({ name: '', location: '', contact: '', adminUsername: '', adminPassword: '' })
@@ -137,21 +145,23 @@ function SuperAdminPage() {
   useEffect(() => {
     if (!isAuthed) return
 
-    const unsubscribe = onValue(databaseRef(database, 'hospitals'), (snapshot) => {
-      const data = snapshot.val()
-      const defaultHospital = { 
-        id: 'default-primary', 
-        name: 'City Health Clinic (Primary)', 
-        location: 'Main Headquarters', 
-        contact: 'admin@cityhealth.com', 
-        isPrimary: true 
-      }
-      if (!data) {
-        setHospitals([defaultHospital])
-      } else {
-        setHospitals([defaultHospital, ...Object.entries(data).map(([id, info]) => ({ id, ...info }))])
-      }
-    })
+    const unsubscribe = onValue(
+      databaseRef(database, 'hospitals'),
+      (snapshot) => {
+        const data = snapshot.val()
+        if (!data) {
+          setHospitals([DEFAULT_HOSPITAL])
+        } else {
+          setHospitals([
+            DEFAULT_HOSPITAL,
+            ...Object.entries(data).map(([id, info]) => ({ id, ...info })),
+          ])
+        }
+      },
+      () => {
+        setHospitals([DEFAULT_HOSPITAL])
+      },
+    )
 
     const unsubAds = onValue(databaseRef(database, 'settings/tvAds'), (snapshot) => {
       const data = snapshot.val()
@@ -515,6 +525,7 @@ function SuperAdminPage() {
                       <h3>{hosp.name}</h3>
                       {hosp.location && <p>{hosp.location}</p>}
                       {hosp.contact && <p>Contact: {hosp.contact}</p>}
+                      <p><strong>TV Hospital ID:</strong> <code>{hosp.id}</code></p>
                     </div>
                     <div className="sa-hospital-actions">
                       <button className="sa-action-btn" onClick={() => openEditHospital(hosp)}>Edit</button>
